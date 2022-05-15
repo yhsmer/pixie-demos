@@ -79,6 +79,7 @@ func main() {
 	}
 
 	bccMod := bcc.NewModule(bpfProgram, []string{})
+
 	const loopWriterWriteHeaderSymbol = "google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader"
 	const loopWriterWriteHeaderProbeFn = "probe_loopy_writer_write_header"
 	mustAttachUprobe(bccMod, binaryProg, loopWriterWriteHeaderSymbol, loopWriterWriteHeaderProbeFn)
@@ -91,6 +92,7 @@ func main() {
 		bccMod.Close()
 	}()
 
+	// BPF Table, perf输出管道
 	table := bcc.NewTable(bccMod.TableId("go_http2_header_events"), bccMod)
 	ch := make(chan []byte)
 
@@ -108,10 +110,12 @@ func main() {
 
 	for {
 		select {
+		// 如果是Ctrl C 则停止程序
 		case <-intCh:
 			fmt.Println("Terminating")
 			os.Exit(0)
 		case v := <-ch:
+			// 从管道中读数据，再格式化输出
 			var parsed http2HeaderEvent
 			if err := binary.Read(bytes.NewBuffer(v), bcc.GetHostByteOrder(), &parsed); err != nil {
 				panic(err)
