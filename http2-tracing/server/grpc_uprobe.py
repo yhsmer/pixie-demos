@@ -88,6 +88,12 @@ type HeaderField struct {
 int probe_loopy_writer_write_header(struct pt_regs* ctx) {
   const void* sp = (const void*)ctx->sp;
 
+  uint32_t stream_id = 0;
+  bpf_probe_read(&stream_id, sizeof(uint32_t), sp + 16);
+
+  bool end_stream = false;
+  bpf_probe_read(&end_stream, sizeof(end_stream), sp + 20);
+
   void* fields_ptr;
 	const int kFieldsPtrOffset = 24;
   bpf_probe_read(&fields_ptr, sizeof(void*), sp + kFieldsPtrOffset);
@@ -97,6 +103,9 @@ int probe_loopy_writer_write_header(struct pt_regs* ctx) {
   bpf_probe_read(&fields_len, sizeof(int64_t), sp + kFieldsPtrOffset + kFieldsLenOffset);
 
   submit_headers(ctx, fields_ptr, fields_len);
+  bpf_trace_printk("stream_id: %d\\n", stream_id);
+  bpf_trace_printk("end_stream: %d\\n", end_stream);
+
   // bpf_trace_printk("probe_loopy_writer_write_header done!\\n");
   return 0;
 }
