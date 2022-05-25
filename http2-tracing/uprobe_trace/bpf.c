@@ -45,25 +45,7 @@ static void copy_header_field(struct header_field_t* dst, const void* header_fie
 // Copies and submits content of an array of hpack.HeaderField to perf buffer.
 // perf Buffer是CPU的缓冲区，每个CPU有自己的perf Buffer，ring Buffer是多个CPU共用的一个缓冲区，perf Buffer性能弱于ring Buffer
 // static 函数表示对其他文件隐藏，作用域局限于本文件
-static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields_len, uint32_t stream_id, bool end_stream) {
-  // Size of the golang hpack.HeaderField struct.
-  const size_t header_field_size = 40;
-  struct go_grpc_http2_header_event_t event = {};
-  for (size_t i = 0; i < MAX_HEADER_COUNT; ++i) {
-    if (i >= fields_len) {
-      continue;
-    }
-    const void* header_field_ptr = fields_ptr + i * header_field_size;
-    copy_header_field(&event.name, header_field_ptr);
-    copy_header_field(&event.value, header_field_ptr + 16);
-    // 将数据输出到perf Buffer
-    go_http2_header_events.perf_submit(ctx, &event, sizeof(event));
-  }
-  event.name
-  go_http2_header_events.perf_submit(ctx, &stream_id)
-}
-
-static void submit_header(struct pt_regs* ctx, void* fields_ptr, int64_t fields_len) {
+static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields_len) {
   // Size of the golang hpack.HeaderField struct.
   const size_t header_field_size = 40;
   struct go_grpc_http2_header_event_t event = {};
@@ -112,7 +94,7 @@ int probe_loopy_writer_write_header(struct pt_regs* ctx) {
 	const int kFieldsLenOffset = 8;
   bpf_probe_read(&fields_len, sizeof(int64_t), sp + kFieldsPtrOffset + kFieldsLenOffset);
 
-  submit_headers(ctx, fields_ptr, fields_len, stream_id, end_stream);
+  submit_headers(ctx, fields_ptr, fields_len);
   return 0;
 }
 
@@ -131,6 +113,6 @@ int probe_http2_server_operate_headers(struct pt_regs* ctx) {
   int64_t fields_len;
   bpf_probe_read(&fields_len, sizeof(int64_t), frame_ptr + 8 + 8);
 
-  submit_header(ctx, fields_ptr, fields_len);
+  submit_headers(ctx, fields_ptr, fields_len);
   return 0;
 }

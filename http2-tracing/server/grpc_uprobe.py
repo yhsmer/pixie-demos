@@ -87,10 +87,14 @@ type HeaderField struct {
 // 任务是读取第三个参数的内容hf，它是HeaderField. 我们使用dlv调试器计算出嵌套数据元素的偏移量，从堆栈中读取数据
 int probe_loopy_writer_write_header(struct pt_regs* ctx) {
   const void* sp = (const void*)ctx->sp;
-
+  
+  // http2 通过stream实现多路复用，用一个唯一ID标识
+  // client 创建的stream，ID为奇数，server创建的为偶数 
+  // stream ID 不可能被重复使用，如果一条连接上面 ID 分配完了，client 会新建一条连接
   uint32_t stream_id = 0;
   bpf_probe_read(&stream_id, sizeof(uint32_t), sp + 16);
 
+  // end stream 表示该stream不会再发送任何数据了
   bool end_stream = false;
   bpf_probe_read(&end_stream, sizeof(end_stream), sp + 20);
 
