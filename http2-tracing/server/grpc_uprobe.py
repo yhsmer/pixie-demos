@@ -131,7 +131,9 @@ int probe_http2_server_operate_headers(struct pt_regs* ctx) {
 }
 """
 
-bpf = BPF(text = bpf_source)
-bpf.attach_uprobe(name = "./grpc_server", sym = "google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader", fn_name = "probe_loopy_writer_write_header")
-bpf.attach_uprobe(name = "./grpc_server", sym = "google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders", fn_name = "probe_http2_server_operate_headers")
+bpf = BPF(text=bpf_source)
+bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader",
+                  fn_name="probe_loopy_writer_write_header")
+bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders",
+                  fn_name="probe_http2_server_operate_headers")
 bpf.trace_print()

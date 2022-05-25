@@ -95,7 +95,7 @@ type HeaderField struct {
 // 任务是读取第三个参数的内容hf，它是HeaderField. 我们使用dlv调试器计算出嵌套数据元素的偏移量，从堆栈中读取数据
 int probe_loopy_writer_write_header(struct pt_regs* ctx) {
   const void* sp = (const void*)ctx->sp;
-
+  
   uint32_t stream_id = 0;
   bpf_probe_read(&stream_id, sizeof(uint32_t), sp + 16);
   // assign_arg(&stream_id, sizeof(stream_id), symaddrs->writeHeader_streamID_loc, sp, regs);
