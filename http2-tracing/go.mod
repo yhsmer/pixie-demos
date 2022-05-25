@@ -10,6 +10,6 @@ require (
 	// github.com/iovisor/gobpf v0.1.0 // indirect
 	// github.com/iovisor/gobpf v0.2.0 // indirect
 	golang.org/x/net v0.0.0-20200822124328-c89045814202 // indirect
-	google.golang.org/grpc v1.43.0 // indirect
-	google.golang.org/protobuf v1.25.0 // indirect
+	google.golang.org/grpc v1.43.0
+	google.golang.org/protobuf v1.25.0
 )
