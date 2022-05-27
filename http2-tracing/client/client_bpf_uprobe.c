@@ -3,13 +3,6 @@
 #define MAX_HEADER_COUNT 64
 #define BPF_PROBE_READ_VAR(value, ptr) bpf_probe_read(&value, sizeof(value), ptr)
 
-// We use the dlv debugger to figure out the offset of nested data
-
-// 命令一个perf输出管道，用来代替bpf_trace_printk
-// Creates a BPF table for pushing out custom event data to user space via a perf ring buffer
-// This is the preferred method for pushing per-event data to user space.
-// BPF_PERF_OUTPUT(go_http2_header_events);
-
 struct header_field_t {
   int32_t size;
   char msg[HEADER_FIELD_STR_SIZE];
@@ -72,8 +65,6 @@ static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields
     bpf_trace_printk("name: %s\n", event.name.msg);
     bpf_trace_printk("value: %s\n", event.value.msg);
     
-    // 将数据输出到perf Buffer
-    // go_http2_header_events.perf_submit(ctx, &event, sizeof(event));
   }
   // bpf_trace_printk("submit_headers done!\\n");
 }
@@ -120,7 +111,6 @@ int probe_http2_client_operate_headers(struct pt_regs* ctx) {
 
   uint8_t flags;
   bpf_probe_read(&flags, sizeof(uint8_t), FrameHeader_ptr + 2);
-  // const bool end_stream = flags & kFlagHeadersEndStream;
 
   uint32_t stream_id;
   bpf_probe_read(&stream_id, sizeof(uint32_t), FrameHeader_ptr + 8);

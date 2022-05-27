@@ -129,3 +129,44 @@ int probe_http2_server_operate_headers(struct pt_regs* ctx) {
   // bpf_trace_printk("probe_http2_server_operate_headers done!\\n");
   return 0;
 }
+
+// Probe for the net/http library's header reader.
+//
+// Function signature:
+//   func (sc *http2serverConn) processHeaders(f *http2MetaHeadersFrame) error
+//
+// Symbol:
+//   net/http.(*http2serverConn).processHeaders
+//
+// Verified to be stable from go1.?? to t go.1.13.
+int probe_http_http2serverConn_processHeaders(struct pt_regs* ctx) {
+  const void* sp = (const void*)ctx->sp;
+
+  void* http2MetaHeadersFrame_ptr = NULL;
+  bpf_probe_read(&http2MetaHeadersFrame_ptr, sizeof(http2MetaHeadersFrame_ptr), sp + 16);
+
+  void* fields_ptr;
+  bpf_probe_read(&fields_ptr, sizeof(void*), http2MetaHeadersFrame_ptr + 8);
+
+  int64_t fields_len;
+  bpf_probe_read(&fields_len, sizeof(int64_t), http2MetaHeadersFrame_ptr + 8 + 8);
+
+  void* http2HeadersFrame_ptr;
+  bpf_probe_read(&http2HeadersFrame_ptr, sizeof(void*), http2MetaHeadersFrame_ptr + 0);
+
+  void* http2FrameHeader_ptr = http2HeadersFrame_ptr + 0;
+
+  uint8_t flags;
+  bpf_probe_read(&flags, sizeof(uint8_t), http2FrameHeader_ptr + 2);
+  const bool end_stream = flags & 0x1;
+
+  uint32_t stream_id;
+  bpf_probe_read(&stream_id, sizeof(uint32_t), http2FrameHeader_ptr + 8);
+
+  bpf_trace_printk("fields_len: %d\n", fields_len);
+  bpf_trace_printk("flags: %d\n", flags);
+  bpf_trace_printk("end_stream: %d\n", end_stream);
+  bpf_trace_printk("stream_id: %d\n", stream_id);
+
+  return 0;
+}
