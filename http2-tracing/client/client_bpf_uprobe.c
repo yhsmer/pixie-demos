@@ -37,7 +37,7 @@ static void copy_header_field(struct header_field_t* dst, const void* header_fie
   // bpf_trace_printk("copy_header_field done!\\n");
 }
 
-static __inline void my_copy_header_field(struct header_field_t* dst, struct gostring* src) {
+static void gostring_copy_header_field(struct header_field_t* dst, struct gostring* src) {
   if (src->len <= 0) {
     dst->size = 0;
     return;
@@ -143,6 +143,53 @@ int probe_http2_client_operate_headers(struct pt_regs* ctx) {
   }
   */
   submit_headers(ctx, fields_ptr, fields_len);
-  // bpf_trace_printk("probe_http2_server_operate_headers done!\\n");
+  bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
   return 0;
 }
+
+// Probe for the hpack's header encoder.
+//
+// Function signature:
+//   func (e *Encoder) WriteField(f HeaderField) error
+// 
+//   WriteField encodes f into a single Write to e's underlying Writer. 
+//   This function may also produce bytes for "Header Table Size Update" if necessary.
+//   If produced, it is done before encoding f.
+//   每次只处理header部分的一对key/value
+// 
+// Symbol:
+//   golang.org/x/net/http2/hpack.(*Encoder).WriteField
+//
+// Verified to be stable from at least go1.6 to t go.1.13.
+int probe_hpack_header_encoder(struct pt_regs* ctx) {
+  // ---------------------------------------------
+  // Extract arguments (on stack)
+  // ---------------------------------------------
+
+  const void* sp = (const void*)ctx->sp;
+
+  void* encoder_ptr = NULL;
+  bpf_probe_read(&encoder_ptr, sizeof(encoder_ptr), sp + 8);
+
+  struct gostring name = {};
+  bpf_probe_read(&name, sizeof(struct gostring), sp + 16);
+
+  struct gostring value = {};
+  bpf_probe_read(&value, sizeof(struct gostring), sp + 32);
+
+  // ------------------------------------------------------
+  // Process
+  // ------------------------------------------------------
+  struct go_grpc_http2_header_event_t event = {};
+  struct gostring* name_ptr = &name;
+  struct gostring* value_ptr = &value;
+  gostring_copy_header_field(&event.name, name_ptr);
+  gostring_copy_header_field(&event.value, value_ptr);
+
+  bpf_trace_printk("name: %s\n", event.name.msg);
+  bpf_trace_printk("value: %s\n", event.value.msg);  
+
+  bpf_trace_printk("----------> probe_hpack_header_encoder done!\n");
+  return 0;
+}
+

@@ -42,6 +42,15 @@ static void copy_header_field(struct header_field_t* dst, const void* header_fie
   // bpf_trace_printk("copy_header_field done!\\n");
 }
 
+static void gostring_copy_header_field(struct header_field_t* dst, struct gostring* src) {
+  if (src->len <= 0) {
+    dst->size = 0;
+    return;
+  }
+  dst->size = min(src->len, (int64_t)HEADER_FIELD_STR_SIZE);
+  bpf_probe_read(dst->msg, dst->size, src->ptr);
+}
+
 // Copies and submits content of an array of hpack.HeaderField to perf buffer.
 // perf Buffer是CPU的缓冲区，每个CPU有自己的perf Buffer，ring Buffer是多个CPU共用的一个缓冲区，perf Buffer性能弱于ring Buffer
 static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields_len) {
@@ -106,7 +115,7 @@ int probe_loopy_writer_write_header(struct pt_regs* ctx) {
   bpf_trace_printk("stream_id: %d\n", stream_id);
   bpf_trace_printk("end_stream: %d\n", end_stream);
 
-  // bpf_trace_printk("probe_loopy_writer_write_header done!\\n");
+  bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
   return 0;
 }
 
@@ -126,10 +135,57 @@ int probe_http2_server_operate_headers(struct pt_regs* ctx) {
   bpf_probe_read(&fields_len, sizeof(int64_t), frame_ptr + 8 + 8);
 
   submit_headers(ctx, fields_ptr, fields_len);
-  // bpf_trace_printk("probe_http2_server_operate_headers done!\\n");
+  bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
   return 0;
 }
 
+// Probe for the hpack's header encoder.
+//
+// Function signature:
+//   func (e *Encoder) WriteField(f HeaderField) error
+// 
+//   WriteField encodes f into a single Write to e's underlying Writer. 
+//   This function may also produce bytes for "Header Table Size Update" if necessary.
+//   If produced, it is done before encoding f.
+//   每次只处理header部分的一对key/value
+// 
+// Symbol:
+//   golang.org/x/net/http2/hpack.(*Encoder).WriteField
+//
+// Verified to be stable from at least go1.6 to t go.1.13.
+int probe_hpack_header_encoder(struct pt_regs* ctx) {
+  // ---------------------------------------------
+  // Extract arguments (on stack)
+  // ---------------------------------------------
+
+  const void* sp = (const void*)ctx->sp;
+
+  void* encoder_ptr = NULL;
+  bpf_probe_read(&encoder_ptr, sizeof(encoder_ptr), sp + 8);
+
+  struct gostring name = {};
+  bpf_probe_read(&name, sizeof(struct gostring), sp + 16);
+
+  struct gostring value = {};
+  bpf_probe_read(&value, sizeof(struct gostring), sp + 32);
+
+  // ------------------------------------------------------
+  // Process
+  // ------------------------------------------------------
+  struct go_grpc_http2_header_event_t event = {};
+  struct gostring* name_ptr = &name;
+  struct gostring* value_ptr = &value;
+  gostring_copy_header_field(&event.name, name_ptr);
+  gostring_copy_header_field(&event.value, value_ptr);
+
+  bpf_trace_printk("name: %s\n", event.name.msg);
+  bpf_trace_printk("value: %s\n", event.value.msg);  
+
+  bpf_trace_printk("----------> probe_hpack_header_encoder done!\n");
+  return 0;
+}
+
+// ****** Verfied to be not worked in 2022-05-27
 // Probe for the net/http library's header reader.
 //
 // Function signature:
@@ -139,6 +195,7 @@ int probe_http2_server_operate_headers(struct pt_regs* ctx) {
 //   net/http.(*http2serverConn).processHeaders
 //
 // Verified to be stable from go1.?? to t go.1.13.
+// ****** Verfied to be not worked in 2022-05-27
 int probe_http_http2serverConn_processHeaders(struct pt_regs* ctx) {
   const void* sp = (const void*)ctx->sp;
 
