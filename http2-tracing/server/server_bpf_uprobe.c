@@ -1,6 +1,7 @@
 #include <uapi/linux/ptrace.h>
 #define HEADER_FIELD_STR_SIZE 128
 #define MAX_HEADER_COUNT 64
+#define MAX_DATA_SIZE 16384
 
 // We use the dlv debugger to figure out the offset of nested data
 
@@ -19,10 +20,28 @@ struct go_grpc_http2_header_event_t {
   struct header_field_t value;
 };
 
+struct go_grpc_data_event_t {
+  char data[MAX_DATA_SIZE];
+  // char data[300];
+};
+
+// BPF programs are limited to a 512-byte stack. We store this value per CPU
+// and use it as a heap allocated value.
+BPF_PERCPU_ARRAY(data_event_buffer_heap, struct go_grpc_data_event_t, 1);
+static __inline struct go_grpc_data_event_t* get_data_event() {
+  uint32_t kZero = 0;
+  return data_event_buffer_heap.lookup(&kZero);
+}
+
 // This matches the golang string object memory layout. Used to help read golang string objects in BPF code.
 struct gostring {
   const char* ptr;
   int64_t len;
+};
+
+struct go_interface {
+  int64_t type;
+  void* ptr;
 };
 
 static int64_t min(int64_t l, int64_t r) {
@@ -185,6 +204,115 @@ int probe_hpack_header_encoder(struct pt_regs* ctx) {
   return 0;
 }
 
+// Probes golang.org/x/net/http2.Framer for payload.
+//
+// As a proxy for the return probe on ReadFrame(), we currently probe checkFrameOrder,
+// since return probes don't work for Go.
+//
+// Function signature:
+//   func (fr *Framer) checkFrameOrder(f Frame) error
+//
+// Symbol:
+//   golang.org/x/net/http2.(*Framer).checkFrameOrder
+//
+// Verified to be stable from at least go1.6 to t go.1.13.
+int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
+  // ---------------------------------------------
+  // Extract arguments
+  // ---------------------------------------------
+
+  const void* sp = (const void*)ctx->sp;
+
+  void* framer_ptr = NULL;
+  bpf_probe_read(&framer_ptr, sizeof(framer_ptr), sp + 8);
+
+  struct go_interface frame_interface = {};
+  bpf_probe_read(&frame_interface, sizeof(frame_interface), sp + 16);
+
+  // ------------------------------------------------------
+  // Extract members of Framer (fd)
+  // ------------------------------------------------------
+
+  /*
+
+  */
+
+  // ------------------------------------------------------
+  // Extract members of FrameHeader (type, flags, stream_id)
+  // ------------------------------------------------------
+
+  // All Frame types start with a frame header, so this is safe.
+  // TODO(oazizi): Is there a more robust way based on DWARF info.
+  // This would be required for dynamic tracing anyways.
+  void* frame_header_ptr = frame_interface.ptr;
+
+  uint8_t frame_type;
+  bpf_probe_read(&frame_type, sizeof(uint8_t), frame_header_ptr + 1);
+
+  uint8_t flags;
+  bpf_probe_read(&flags, sizeof(uint8_t), frame_header_ptr + 2);
+  const bool end_stream = flags & 0x1;
+
+  uint32_t stream_id;
+  bpf_probe_read(&stream_id, sizeof(uint32_t), frame_header_ptr + 8);
+
+  bpf_trace_printk("frame_type: %d\n", frame_type);
+  bpf_trace_printk("flags: %d\n", flags);
+  bpf_trace_printk("end_stream: %d\n", end_stream);
+  bpf_trace_printk("stream_id: %d\n", stream_id);
+
+  // Consider only data frames (0).
+  if (frame_type != 0) {
+    bpf_trace_printk("frame_type: %d, != 0, is not a data frames. returned! \n\n", frame_type);
+    return 0;
+  }
+
+  // ------------------------------------------------------
+  // Extract members of DataFrame (data)
+  // ------------------------------------------------------
+
+  // Reinterpret as data frame.
+  void* data_frame_ptr = frame_interface.ptr;
+
+  char* data_ptr;
+  bpf_probe_read(&data_ptr, sizeof(char*), data_frame_ptr + 16 + 0);
+
+  int64_t data_len;
+  bpf_probe_read(&data_len, sizeof(int64_t), data_frame_ptr + 16 + 8);
+
+  bpf_trace_printk("data_len: %d\n", data_len);
+
+  // ------------------------------------------------------
+  // Submit
+  // ------------------------------------------------------
+
+  
+  struct go_grpc_data_event_t* info = get_data_event();
+  // struct go_grpc_data_event_t info = {};
+
+  uint32_t data_buf_size = min(data_len, MAX_DATA_SIZE);
+  bpf_trace_printk("data_buf_size: %d\n", data_buf_size);
+
+  // Note that we have some black magic below with the string sizes.
+  // This is to avoid passing a size of 0 to bpf_probe_read(),
+  // which causes BPF verifier issues on kernel 4.14.
+  // The black magic includes an asm volatile, because otherwise Clang
+  // will optimize our magic away.
+  size_t data_buf_size_minus_1 = data_buf_size - 1;
+  asm volatile("" : "+r"(data_buf_size_minus_1) :);
+  data_buf_size = data_buf_size_minus_1 + 1;
+
+  if (data_buf_size_minus_1 < MAX_DATA_SIZE) {
+    //bpf_probe_read(info->data, data_buf_size, data_ptr);
+    bpf_trace_printk("data: %s\n", info->data); 
+  }
+
+  bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n");
+  return 0;
+}
+
+
+// -----------------------------------------------
 // ****** Verfied to be not worked in 2022-05-27
 // Probe for the net/http library's header reader.
 //
