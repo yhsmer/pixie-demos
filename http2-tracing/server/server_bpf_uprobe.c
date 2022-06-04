@@ -286,7 +286,6 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   // Submit
   // ------------------------------------------------------
 
-  
   struct go_grpc_data_event_t* info = get_data_event();
   // struct go_grpc_data_event_t info = {};
 
@@ -303,7 +302,7 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   data_buf_size = data_buf_size_minus_1 + 1;
 
   if (data_buf_size_minus_1 < MAX_DATA_SIZE) {
-    //bpf_probe_read(info->data, data_buf_size, data_ptr);
+    bpf_probe_read(info->data, data_buf_size, data_ptr);
     bpf_trace_printk("data: %s\n", info->data); 
   }
 

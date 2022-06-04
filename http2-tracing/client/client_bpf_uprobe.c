@@ -3,11 +3,19 @@
 #define MAX_HEADER_COUNT 64
 #define MAX_DATA_SIZE 16384
 #define BPF_PROBE_READ_VAR(value, ptr) bpf_probe_read(&value, sizeof(value), ptr)
+BPF_PERF_OUTPUT(go_http2_header_events);
 
 struct go_interface {
   int64_t type;
   void* ptr;
 };
+
+struct data_t{
+  int int_value;
+  char name[20];
+  char char_value[HEADER_FIELD_STR_SIZE];
+};
+
 
 struct header_field_t {
   int32_t size;
@@ -41,7 +49,14 @@ struct gostring {
 static int64_t min(int64_t l, int64_t r) {
   return l < r ? l : r;
 }
-
+// C语言没有引用传递，只有值传递，或者传指针
+static void submit_data_t(struct pt_regs* ctx, char *name, int int_value, char *char_value){
+  struct data_t data = {};
+  strcpy(data.name, name);
+  data.int_value = int_value;
+  strcpy(data.char_value, char_value);
+  go_http2_header_events.perf_submit(ctx, &data, sizeof(data));
+}
 
 // Copy the content of a hpack.HeaderField object into header_field_t object.
 static void copy_header_field(struct header_field_t* dst, const void* header_field_ptr) {
@@ -83,7 +98,8 @@ static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields
     // bpf_trace_printk("[name='%s' value='%s']\\n", event.name.msg, event.value.msg);
     bpf_trace_printk("name: %s\n", event.name.msg);
     bpf_trace_printk("value: %s\n", event.value.msg);
-    
+
+    //submit_data_t(ctx, event.name.msg, -1234, event.value.msg);
   }
   // bpf_trace_printk("submit_headers done!\\n");
 }
@@ -139,6 +155,10 @@ int probe_http2_client_operate_headers(struct pt_regs* ctx) {
   bpf_trace_printk("stream_id: %d\n", stream_id);
   bpf_trace_printk("fields_len: %d\n", fields_len);
 
+  //submit_data_t(ctx, "flags", flags, "");
+  //submit_data_t(ctx, "end_stream", flags & 0x1, "");
+  //submit_data_t(ctx, "stream_id", stream_id, "");
+  //submit_data_t(ctx, "fields_len", fields_len, "");
   /*
   const int kSizeOfHeaderField = 40;
   struct go_grpc_http2_header_event_t event = {};
@@ -206,7 +226,9 @@ int probe_hpack_header_encoder(struct pt_regs* ctx) {
   gostring_copy_header_field(&event.value, value_ptr);
 
   bpf_trace_printk("name: %s\n", event.name.msg);
-  bpf_trace_printk("value: %s\n", event.value.msg);  
+  bpf_trace_printk("value: %s\n", event.value.msg);
+
+  //submit_data_t(ctx, event.name.msg, -1234, event.value.msg);
 
   bpf_trace_printk("----------> probe_hpack_header_encoder done!\n");
   return 0;
@@ -269,6 +291,11 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   bpf_trace_printk("flags: %d\n", flags);
   bpf_trace_printk("end_stream: %d\n", end_stream);
   bpf_trace_printk("stream_id: %d\n", stream_id);
+
+  //submit_data_t(ctx, "flags", flags, "");
+  //submit_data_t(ctx, "end_stream", end_stream, "");
+  //submit_data_t(ctx, "stream_id", stream_id, "");
+  //submit_data_t(ctx, "frame_type", frame_type, "");
 
   // Consider only data frames (0).
   if (frame_type != 0) {
