@@ -5,7 +5,7 @@
 
 // We use the dlv debugger to figure out the offset of nested data
 
-// 命令一个perf输出管道，用来代替bpf_trace_printk
+// 命令一个perf输出管道，用来代替//bpf_trace_printk
 // Creates a BPF table for pushing out custom event data to user space via a perf ring buffer
 // This is the preferred method for pushing per-event data to user space.
 // BPF_PERF_OUTPUT(go_http2_header_events);
@@ -21,8 +21,8 @@ struct go_grpc_http2_header_event_t {
 };
 
 struct go_grpc_data_event_t {
-  char data[MAX_DATA_SIZE];
-  // char data[300];
+  //char data[MAX_DATA_SIZE];
+  char data[128];
 };
 
 // BPF programs are limited to a 512-byte stack. We store this value per CPU
@@ -58,7 +58,7 @@ static void copy_header_field(struct header_field_t* dst, const void* header_fie
   }
   dst->size = min(str.len, HEADER_FIELD_STR_SIZE);
   bpf_probe_read(dst->msg, dst->size, str.ptr);
-  // bpf_trace_printk("copy_header_field done!\\n");
+  // //bpf_trace_printk("copy_header_field done!\\n");
 }
 
 static void gostring_copy_header_field(struct header_field_t* dst, struct gostring* src) {
@@ -85,14 +85,14 @@ static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields
     copy_header_field(&event.name, header_field_ptr);
     copy_header_field(&event.value, header_field_ptr + 16);
 
-    // bpf_trace_printk("[name='%s' value='%s']\\n", event.name.msg, event.value.msg);
-    bpf_trace_printk("name: %s\n", event.name.msg);
-    bpf_trace_printk("value: %s\n", event.value.msg);
+    // //bpf_trace_printk("[name='%s' value='%s']\\n", event.name.msg, event.value.msg);
+    //bpf_trace_printk("name: %s\n", event.name.msg);
+    //bpf_trace_printk("value: %s\n", event.value.msg);
     
     // 将数据输出到perf Buffer
     // go_http2_header_events.perf_submit(ctx, &event, sizeof(event));
   }
-  // bpf_trace_printk("submit_headers done!\\n");
+  // //bpf_trace_printk("submit_headers done!\\n");
 }
 
 /*
@@ -131,10 +131,10 @@ int probe_loopy_writer_write_header(struct pt_regs* ctx) {
   bpf_probe_read(&fields_len, sizeof(int64_t), sp + kFieldsPtrOffset + kFieldsLenOffset);
 
   submit_headers(ctx, fields_ptr, fields_len);
-  bpf_trace_printk("stream_id: %d\n", stream_id);
-  bpf_trace_printk("end_stream: %d\n", end_stream);
+  //bpf_trace_printk("stream_id: %d\n", stream_id);
+  //bpf_trace_printk("end_stream: %d\n", end_stream);
 
-  bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
+  //bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
   return 0;
 }
 
@@ -154,7 +154,7 @@ int probe_http2_server_operate_headers(struct pt_regs* ctx) {
   bpf_probe_read(&fields_len, sizeof(int64_t), frame_ptr + 8 + 8);
 
   submit_headers(ctx, fields_ptr, fields_len);
-  bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
+  //bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
   return 0;
 }
 
@@ -197,10 +197,10 @@ int probe_hpack_header_encoder(struct pt_regs* ctx) {
   gostring_copy_header_field(&event.name, name_ptr);
   gostring_copy_header_field(&event.value, value_ptr);
 
-  bpf_trace_printk("name: %s\n", event.name.msg);
-  bpf_trace_printk("value: %s\n", event.value.msg);  
+  //bpf_trace_printk("name: %s\n", event.name.msg);
+  //bpf_trace_printk("value: %s\n", event.value.msg);  
 
-  bpf_trace_printk("----------> probe_hpack_header_encoder done!\n");
+  //bpf_trace_printk("----------> probe_hpack_header_encoder done!\n");
   return 0;
 }
 
@@ -256,14 +256,14 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   uint32_t stream_id;
   bpf_probe_read(&stream_id, sizeof(uint32_t), frame_header_ptr + 8);
 
-  bpf_trace_printk("frame_type: %d\n", frame_type);
-  bpf_trace_printk("flags: %d\n", flags);
-  bpf_trace_printk("end_stream: %d\n", end_stream);
-  bpf_trace_printk("stream_id: %d\n", stream_id);
+  //bpf_trace_printk("frame_type: %d\n", frame_type);
+  //bpf_trace_printk("flags: %d\n", flags);
+  //bpf_trace_printk("end_stream: %d\n", end_stream);
+  //bpf_trace_printk("stream_id: %d\n", stream_id);
 
   // Consider only data frames (0).
   if (frame_type != 0) {
-    bpf_trace_printk("frame_type: %d, != 0, is not a data frames. returned! \n\n", frame_type);
+    //bpf_trace_printk("frame_type: %d, != 0, is not a data frames. returned! \n\n", frame_type);
     return 0;
   }
 
@@ -280,17 +280,17 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   int64_t data_len;
   bpf_probe_read(&data_len, sizeof(int64_t), data_frame_ptr + 16 + 8);
 
-  bpf_trace_printk("data_len: %d\n", data_len);
+  //bpf_trace_printk("data_len: %d\n", data_len);
 
   // ------------------------------------------------------
   // Submit
   // ------------------------------------------------------
 
-  struct go_grpc_data_event_t* info = get_data_event();
-  // struct go_grpc_data_event_t info = {};
+  // struct go_grpc_data_event_t* info = get_data_event();
+  struct go_grpc_data_event_t info = {};
 
   uint32_t data_buf_size = min(data_len, MAX_DATA_SIZE);
-  bpf_trace_printk("data_buf_size: %d\n", data_buf_size);
+  
 
   // Note that we have some black magic below with the string sizes.
   // This is to avoid passing a size of 0 to bpf_probe_read(),
@@ -301,56 +301,69 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   asm volatile("" : "+r"(data_buf_size_minus_1) :);
   data_buf_size = data_buf_size_minus_1 + 1;
 
+  //bpf_trace_printk("data_buf_size: %d\n", data_buf_size);
   if (data_buf_size_minus_1 < MAX_DATA_SIZE) {
-    bpf_probe_read(info->data, data_buf_size, data_ptr);
-    bpf_trace_printk("data: %s\n", info->data); 
+    bpf_probe_read(info.data, 12, data_ptr);
+    //bpf_trace_printk("data: %s\n", info.data); 
   }
 
-  bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n");
+  //bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n");
   return 0;
 }
 
-
-// -----------------------------------------------
-// ****** Verfied to be not worked in 2022-05-27
-// Probe for the net/http library's header reader.
+// Probe for the golang.org/x/net/http2 library's frame writer.
 //
 // Function signature:
-//   func (sc *http2serverConn) processHeaders(f *http2MetaHeadersFrame) error
+//   func (f *Framer) WriteDataPadded(streamID uint32, endStream bool, data, pad []byte) error
 //
 // Symbol:
-//   net/http.(*http2serverConn).processHeaders
+//   golang.org/x/net/http2.(*Framer).WriteDataPadded
 //
-// Verified to be stable from go1.?? to t go.1.13.
-// ****** Verfied to be not worked in 2022-05-27
-int probe_http_http2serverConn_processHeaders(struct pt_regs* ctx) {
+// Verified to be stable from go1.7 to t go.1.13.
+int probe_http2_framer_write_data(struct pt_regs* ctx) {
+  // ---------------------------------------------
+  // Extract arguments
+  // ---------------------------------------------
+
   const void* sp = (const void*)ctx->sp;
 
-  void* http2MetaHeadersFrame_ptr = NULL;
-  bpf_probe_read(&http2MetaHeadersFrame_ptr, sizeof(http2MetaHeadersFrame_ptr), sp + 16);
+  void* framer_ptr = NULL;
+  bpf_probe_read(&framer_ptr, sizeof(framer_ptr), sp + 8);
 
-  void* fields_ptr;
-  bpf_probe_read(&fields_ptr, sizeof(void*), http2MetaHeadersFrame_ptr + 8);
+  uint32_t stream_id = 0;
+  bpf_probe_read(&stream_id, sizeof(stream_id), sp + 16);
 
-  int64_t fields_len;
-  bpf_probe_read(&fields_len, sizeof(int64_t), http2MetaHeadersFrame_ptr + 8 + 8);
+  bool end_stream = 0;
+  bpf_probe_read(&end_stream, sizeof(end_stream), sp + 20);
 
-  void* http2HeadersFrame_ptr;
-  bpf_probe_read(&http2HeadersFrame_ptr, sizeof(void*), http2MetaHeadersFrame_ptr + 0);
+  //bpf_trace_printk("end_stream: %d\n", end_stream);
+  //bpf_trace_printk("stream_id: %d\n", stream_id);
 
-  void* http2FrameHeader_ptr = http2HeadersFrame_ptr + 0;
+  char* data_ptr = NULL;
+  bpf_probe_read(&data_ptr, sizeof(data_ptr), sp + 24);
 
-  uint8_t flags;
-  bpf_probe_read(&flags, sizeof(uint8_t), http2FrameHeader_ptr + 2);
-  const bool end_stream = flags & 0x1;
+  int64_t data_len = 0;
+  bpf_probe_read(&data_len, sizeof(data_len), sp + 32);
 
-  uint32_t stream_id;
-  bpf_probe_read(&stream_id, sizeof(uint32_t), http2FrameHeader_ptr + 8);
+  struct go_grpc_data_event_t info = {};
 
-  bpf_trace_printk("fields_len: %d\n", fields_len);
-  bpf_trace_printk("flags: %d\n", flags);
-  bpf_trace_printk("end_stream: %d\n", end_stream);
-  bpf_trace_printk("stream_id: %d\n", stream_id);
+  uint32_t data_buf_size = min(data_len, MAX_DATA_SIZE);
 
+  // Note that we have some black magic below with the string sizes.
+  // This is to avoid passing a size of 0 to bpf_probe_read(),
+  // which causes BPF verifier issues on kernel 4.14.
+  // The black magic includes an asm volatile, because otherwise Clang
+  // will optimize our magic away.
+  size_t data_buf_size_minus_1 = data_buf_size - 1;
+  asm volatile("" : "+r"(data_buf_size_minus_1) :);
+  data_buf_size = data_buf_size_minus_1 + 1;
+
+  //bpf_trace_printk("data_buf_size: %d\n", data_buf_size);
+  if (data_buf_size_minus_1 < MAX_DATA_SIZE) {
+    bpf_probe_read(info.data, sizeof(info.data), data_ptr);
+    //bpf_trace_printk("data: %s\n", info.data); 
+  }
+
+  //bpf_trace_printk("----------> probe_http2_framer_write_data done!\n");
   return 0;
 }
