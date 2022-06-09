@@ -5,7 +5,7 @@
 
 // We use the dlv debugger to figure out the offset of nested data
 
-// 命令一个perf输出管道，用来代替//bpf_trace_printk
+// 命令一个perf输出管道，用来代替bpf_trace_printk
 // Creates a BPF table for pushing out custom event data to user space via a perf ring buffer
 // This is the preferred method for pushing per-event data to user space.
 // BPF_PERF_OUTPUT(go_http2_header_events);
@@ -58,7 +58,7 @@ static void copy_header_field(struct header_field_t* dst, const void* header_fie
   }
   dst->size = min(str.len, HEADER_FIELD_STR_SIZE);
   bpf_probe_read(dst->msg, dst->size, str.ptr);
-  // //bpf_trace_printk("copy_header_field done!\\n");
+  // bpf_trace_printk("copy_header_field done!\\n");
 }
 
 static void gostring_copy_header_field(struct header_field_t* dst, struct gostring* src) {
@@ -85,14 +85,14 @@ static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields
     copy_header_field(&event.name, header_field_ptr);
     copy_header_field(&event.value, header_field_ptr + 16);
 
-    // //bpf_trace_printk("[name='%s' value='%s']\\n", event.name.msg, event.value.msg);
-    //bpf_trace_printk("name: %s\n", event.name.msg);
-    //bpf_trace_printk("value: %s\n", event.value.msg);
+    // bpf_trace_printk("[name='%s' value='%s']\\n", event.name.msg, event.value.msg);
+    bpf_trace_printk("name: %s\n", event.name.msg);
+    bpf_trace_printk("value: %s\n", event.value.msg);
     
     // 将数据输出到perf Buffer
     // go_http2_header_events.perf_submit(ctx, &event, sizeof(event));
   }
-  // //bpf_trace_printk("submit_headers done!\\n");
+  // bpf_trace_printk("submit_headers done!\\n");
 }
 
 /*
@@ -131,10 +131,10 @@ int probe_loopy_writer_write_header(struct pt_regs* ctx) {
   bpf_probe_read(&fields_len, sizeof(int64_t), sp + kFieldsPtrOffset + kFieldsLenOffset);
 
   submit_headers(ctx, fields_ptr, fields_len);
-  //bpf_trace_printk("stream_id: %d\n", stream_id);
-  //bpf_trace_printk("end_stream: %d\n", end_stream);
+  bpf_trace_printk("stream_id: %d\n", stream_id);
+  bpf_trace_printk("end_stream: %d\n", end_stream);
 
-  //bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
+  bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
   return 0;
 }
 
@@ -154,7 +154,7 @@ int probe_http2_server_operate_headers(struct pt_regs* ctx) {
   bpf_probe_read(&fields_len, sizeof(int64_t), frame_ptr + 8 + 8);
 
   submit_headers(ctx, fields_ptr, fields_len);
-  //bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
+  bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
   return 0;
 }
 
@@ -197,10 +197,10 @@ int probe_hpack_header_encoder(struct pt_regs* ctx) {
   gostring_copy_header_field(&event.name, name_ptr);
   gostring_copy_header_field(&event.value, value_ptr);
 
-  //bpf_trace_printk("name: %s\n", event.name.msg);
-  //bpf_trace_printk("value: %s\n", event.value.msg);  
+  bpf_trace_printk("name: %s\n", event.name.msg);
+  bpf_trace_printk("value: %s\n", event.value.msg);  
 
-  //bpf_trace_printk("----------> probe_hpack_header_encoder done!\n");
+  bpf_trace_printk("----------> probe_hpack_header_encoder done!\n");
   return 0;
 }
 
@@ -256,14 +256,14 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   uint32_t stream_id;
   bpf_probe_read(&stream_id, sizeof(uint32_t), frame_header_ptr + 8);
 
-  //bpf_trace_printk("frame_type: %d\n", frame_type);
-  //bpf_trace_printk("flags: %d\n", flags);
-  //bpf_trace_printk("end_stream: %d\n", end_stream);
-  //bpf_trace_printk("stream_id: %d\n", stream_id);
+  bpf_trace_printk("frame_type: %d\n", frame_type);
+  bpf_trace_printk("flags: %d\n", flags);
+  bpf_trace_printk("end_stream: %d\n", end_stream);
+  bpf_trace_printk("stream_id: %d\n", stream_id);
 
   // Consider only data frames (0).
   if (frame_type != 0) {
-    //bpf_trace_printk("frame_type: %d, != 0, is not a data frames. returned! \n\n", frame_type);
+    bpf_trace_printk("frame_type: %d, != 0, is not a data frames. returned! \n\n", frame_type);
     return 0;
   }
 
@@ -280,7 +280,7 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   int64_t data_len;
   bpf_probe_read(&data_len, sizeof(int64_t), data_frame_ptr + 16 + 8);
 
-  //bpf_trace_printk("data_len: %d\n", data_len);
+  bpf_trace_printk("data_len: %d\n", data_len);
 
   // ------------------------------------------------------
   // Submit
@@ -301,13 +301,13 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   asm volatile("" : "+r"(data_buf_size_minus_1) :);
   data_buf_size = data_buf_size_minus_1 + 1;
 
-  //bpf_trace_printk("data_buf_size: %d\n", data_buf_size);
+  bpf_trace_printk("data_buf_size: %d\n", data_buf_size);
   if (data_buf_size_minus_1 < MAX_DATA_SIZE) {
     bpf_probe_read(info.data, 12, data_ptr);
-    //bpf_trace_printk("data: %s\n", info.data); 
+    bpf_trace_printk("data: %s\n", info.data); 
   }
 
-  //bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n");
+  bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n");
   return 0;
 }
 
@@ -336,8 +336,8 @@ int probe_http2_framer_write_data(struct pt_regs* ctx) {
   bool end_stream = 0;
   bpf_probe_read(&end_stream, sizeof(end_stream), sp + 20);
 
-  //bpf_trace_printk("end_stream: %d\n", end_stream);
-  //bpf_trace_printk("stream_id: %d\n", stream_id);
+  bpf_trace_printk("end_stream: %d\n", end_stream);
+  bpf_trace_printk("stream_id: %d\n", stream_id);
 
   char* data_ptr = NULL;
   bpf_probe_read(&data_ptr, sizeof(data_ptr), sp + 24);
@@ -358,12 +358,12 @@ int probe_http2_framer_write_data(struct pt_regs* ctx) {
   asm volatile("" : "+r"(data_buf_size_minus_1) :);
   data_buf_size = data_buf_size_minus_1 + 1;
 
-  //bpf_trace_printk("data_buf_size: %d\n", data_buf_size);
+  bpf_trace_printk("data_buf_size: %d\n", data_buf_size);
   if (data_buf_size_minus_1 < MAX_DATA_SIZE) {
     bpf_probe_read(info.data, sizeof(info.data), data_ptr);
-    //bpf_trace_printk("data: %s\n", info.data); 
+    bpf_trace_printk("data: %s\n", info.data); 
   }
 
-  //bpf_trace_printk("----------> probe_http2_framer_write_data done!\n");
+  bpf_trace_printk("----------> probe_http2_framer_write_data done!\n");
   return 0;
 }
