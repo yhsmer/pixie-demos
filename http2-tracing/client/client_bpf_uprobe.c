@@ -160,28 +160,6 @@ int probe_http2_client_operate_headers(struct pt_regs* ctx) {
   //submit_data_t(ctx, "end_stream", flags & 0x1, "");
   //submit_data_t(ctx, "stream_id", stream_id, "");
   //submit_data_t(ctx, "fields_len", fields_len, "");
-  /*
-  const int kSizeOfHeaderField = 40;
-  struct go_grpc_http2_header_event_t event = {};
-  for (unsigned int i = 0; i < MAX_HEADER_COUNT; ++i) {
-    if (i < fields_len) {
-      // fill_header_field(event, fields_ptr + i * kSizeOfHeaderField, symaddrs);
-
-      struct gostring name;
-      BPF_PROBE_READ_VAR(name, fields_ptr + i * kSizeOfHeaderField + 0);
-
-      struct gostring value;
-      BPF_PROBE_READ_VAR(value, fields_ptr + i * kSizeOfHeaderField + 16);
-      
-      copy_header_field(&event.name, &name);
-      copy_header_field(&event.value, &value);
-
-      bpf_trace_printk("name: %s\\n", event.name.msg);
-      bpf_trace_printk("value: %s\\n", event.value.msg);
-      // go_grpc_events.perf_submit(ctx, event, sizeof(*event));
-    }  
-  }
-  */
   submit_headers(ctx, fields_ptr, fields_len);
   bpf_trace_printk("----------> probe_http2_client_operate_headers done!\n");
   return 0;
@@ -411,4 +389,3 @@ int probe_http2_framer_write_data(struct pt_regs* ctx) {
   bpf_trace_printk("----------> probe_http2_framer_write_data done!\n");
   return 0;
 }
-
