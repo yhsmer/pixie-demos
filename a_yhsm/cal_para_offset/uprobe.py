@@ -11,7 +11,8 @@ bpf = BPF(text=bpf_source)
 #bpf.attach_uprobe(name="./test", sym="main.forString", fn_name="get_forString")
 #bpf.attach_uprobe(name="./test", sym="main.forComplex", fn_name="get_forComplex")
 #bpf.attach_uprobe(name="./test", sym="main.forArray", fn_name="get_forArray")
-bpf.attach_uprobe(name="./test", sym="main.forSlice", fn_name="get_forSlice")
+# bpf.attach_uprobe(na=me="./test", sym="main.forSlice", fn_name="get_forSlice")
+bpf.attach_uprobe(name="./interface", sym="main.run", fn_name="get_forInterface")
 
 
 output = 1;

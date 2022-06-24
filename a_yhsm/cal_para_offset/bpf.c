@@ -117,3 +117,21 @@ inline int get_forSlice(struct pt_regs *ctx){
     bpf_trace_printk("%d\n", a);
     return 0;
 }
+
+inline int get_forInterface(struct pt_regs *ctx){
+    bpf_trace_printk("forInterface\n");
+
+    void* sp = (void*)ctx->sp;
+   
+    void* ptr = NULL;
+    bpf_probe_read(&ptr, sizeof(ptr), sp + 8 + 8);
+
+    long a;
+    bpf_probe_read(&a, sizeof(a), ptr);
+    bpf_trace_printk("%d\n", a);
+
+
+    bpf_probe_read(&a,sizeof(a), ptr + 8);
+    bpf_trace_printk("%d\n", a);
+    return 0;
+}

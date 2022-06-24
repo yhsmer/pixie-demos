@@ -129,6 +129,16 @@ type HeaderField struct {
 // 
 // 跟踪在 gRPC 客户端收到的传入标头，operateHeaders 解析 Headers 帧
 int probe_http2_client_operate_headers(struct pt_regs* ctx) {
+  // bpf_get_current_pid_tgid 的返回值为： current->tgid << 32 | current->pid
+  // 高 32 位置为 tgid ，低 32 位为 pid(tid)，
+  // 线程组id
+  uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
+  bpf_trace_printk("tgid: %d\n", tgid);
+
+  u32 pid = bpf_get_current_pid_tgid();
+  bpf_trace_printk("pid: %d\n", pid);
+
+
   const void* sp = (const void*)ctx->sp;
 
   void* frame_ptr;
@@ -145,16 +155,16 @@ int probe_http2_client_operate_headers(struct pt_regs* ctx) {
 
   void* FrameHeader_ptr = HeadersFrame_ptr + 0;
 
-  uint8_t flags;
-  bpf_probe_read(&flags, sizeof(uint8_t), FrameHeader_ptr + 2);
+  // uint8_t flags;
+  // bpf_probe_read(&flags, sizeof(uint8_t), FrameHeader_ptr + 2);
 
-  uint32_t stream_id;
-  bpf_probe_read(&stream_id, sizeof(uint32_t), FrameHeader_ptr + 8);
+  // uint32_t stream_id;
+  // bpf_probe_read(&stream_id, sizeof(uint32_t), FrameHeader_ptr + 8);
 
-  bpf_trace_printk("flags: %d\n", flags);
-  bpf_trace_printk("end_stream: %d\n", flags & 0x1);
-  bpf_trace_printk("stream_id: %d\n", stream_id);
-  bpf_trace_printk("fields_len: %d\n", fields_len);
+  // bpf_trace_printk("flags: %d\n", flags);
+  // bpf_trace_printk("end_stream: %d\n", flags & 0x1);
+  // bpf_trace_printk("stream_id: %d\n", stream_id);
+  // bpf_trace_printk("fields_len: %d\n", fields_len);
 
   //submit_data_t(ctx, "flags", flags, "");
   //submit_data_t(ctx, "end_stream", flags & 0x1, "");
@@ -271,9 +281,9 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   bpf_probe_read(&stream_id, sizeof(uint32_t), frame_header_ptr + 8);
 
   bpf_trace_printk("frame_type: %d\n", frame_type);
-  bpf_trace_printk("flags: %d\n", flags);
-  bpf_trace_printk("end_stream: %d\n", end_stream);
-  bpf_trace_printk("stream_id: %d\n", stream_id);
+  // bpf_trace_printk("flags: %d\n", flags);
+  // bpf_trace_printk("end_stream: %d\n", end_stream);
+  // bpf_trace_printk("stream_id: %d\n", stream_id);
 
   //submit_data_t(ctx, "flags", flags, "");
   //submit_data_t(ctx, "end_stream", end_stream, "");
@@ -358,8 +368,8 @@ int probe_http2_framer_write_data(struct pt_regs* ctx) {
   bool end_stream = 0;
   bpf_probe_read(&end_stream, sizeof(end_stream), sp + 20);
 
-  bpf_trace_printk("end_stream: %d\n", end_stream);
-  bpf_trace_printk("stream_id: %d\n", stream_id);
+  // bpf_trace_printk("end_stream: %d\n", end_stream);
+  // bpf_trace_printk("stream_id: %d\n", stream_id);
 
   char* data_ptr = NULL;
   bpf_probe_read(&data_ptr, sizeof(data_ptr), sp + 24);
@@ -387,5 +397,45 @@ int probe_http2_framer_write_data(struct pt_regs* ctx) {
   }
 
   bpf_trace_printk("----------> probe_http2_framer_write_data done!\n");
+  return 0;
+}
+
+
+// Signature: func (l *loopyWriter) writeHeader(streamID uint32, endStream bool, hf []hpack.HeaderField, onWrite func())
+// 服务端此函数接受明文header字段并将它们发送到内部缓冲区。函数签名和参数的类型定义是稳定的，自2018 年以来没有改变。
+// 任务是读取第三个参数的内容hf，它是HeaderField. 我们使用dlv调试器计算出嵌套数据元素的偏移量，从堆栈中读取数据
+int probe_loopy_writer_write_header(struct pt_regs* ctx) {
+  
+  uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
+  bpf_trace_printk("tgid: %d\n", tgid);
+
+  u32 pid = bpf_get_current_pid_tgid();
+  bpf_trace_printk("pid: %d\n", pid);
+
+  const void* sp = (const void*)ctx->sp;
+  
+  // http2 通过stream实现多路复用，用一个唯一ID标识
+  // client 创建的stream，ID为奇数，server创建的为偶数 
+  // stream ID 不可能被重复使用，如果一条连接上面 ID 分配完了，client 会新建一条连接
+  // uint32_t stream_id = 0;
+  // bpf_probe_read(&stream_id, sizeof(uint32_t), sp + 16);
+
+  // end stream 表示该stream不会再发送任何数据了
+  // bool end_stream = false;
+  // bpf_probe_read(&end_stream, sizeof(end_stream), sp + 20);
+
+  void* fields_ptr;
+	const int kFieldsPtrOffset = 24;
+  bpf_probe_read(&fields_ptr, sizeof(void*), sp + kFieldsPtrOffset);
+
+  int64_t fields_len;
+	const int kFieldsLenOffset = 8;
+  bpf_probe_read(&fields_len, sizeof(int64_t), sp + kFieldsPtrOffset + kFieldsLenOffset);
+
+  submit_headers(ctx, fields_ptr, fields_len);
+  // bpf_trace_printk("stream_id: %d\n", stream_id);
+  // bpf_trace_printk("end_stream: %d\n", end_stream);
+
+  bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
   return 0;
 }
