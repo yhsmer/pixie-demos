@@ -69,7 +69,7 @@ static void copy_header_field(struct header_field_t* dst, const void* header_fie
   }
   dst->size = min(str.len, HEADER_FIELD_STR_SIZE);
   bpf_probe_read(dst->msg, dst->size, str.ptr);
-  // bpf_trace_printk("copy_header_field done!\\n");
+  //bpf_trace_printk("copy_header_field done!\\n");
 }
 
 static void gostring_copy_header_field(struct header_field_t* dst, struct gostring* src) {
@@ -83,7 +83,7 @@ static void gostring_copy_header_field(struct header_field_t* dst, struct gostri
 
 // Copies and submits content of an array of hpack.HeaderField to perf buffer.
 // perf Buffer是CPU的缓冲区，每个CPU有自己的perf Buffer，ring Buffer是多个CPU共用的一个缓冲区，perf Buffer性能弱于ring Buffer
-static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields_len) {
+static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields_len, uint32_t stream_id) {
   // Size of the golang hpack.HeaderField struct.
   const size_t header_field_size = 40;
   // struct go_grpc_http2_header_event_t event = {};
@@ -96,13 +96,13 @@ static void submit_headers(struct pt_regs* ctx, void* fields_ptr, int64_t fields
     copy_header_field(&event.name, header_field_ptr);
     copy_header_field(&event.value, header_field_ptr + 16);
 
-    // bpf_trace_printk("[name='%s' value='%s']\\n", event.name.msg, event.value.msg);
     bpf_trace_printk("name: %s\n", event.name.msg);
     bpf_trace_printk("value: %s\n", event.value.msg);
 
     submit_data_t(ctx, event.name.msg, -1234, event.value.msg);
   }
-  // bpf_trace_printk("submit_headers done!\\n");
+  // bpf_ktime_get_ns() 返回纳秒，1 ms = 1e6 ns
+  bpf_trace_printk("stream_id: %d, time: %lldms \n", stream_id ,bpf_ktime_get_ns() / 1000000);
 }
 
 /*
@@ -155,22 +155,22 @@ int probe_http2_client_operate_headers(struct pt_regs* ctx) {
 
   void* FrameHeader_ptr = HeadersFrame_ptr + 0;
 
-  // uint8_t flags;
-  // bpf_probe_read(&flags, sizeof(uint8_t), FrameHeader_ptr + 2);
+  uint8_t flags;
+  bpf_probe_read(&flags, sizeof(uint8_t), FrameHeader_ptr + 2);
 
-  // uint32_t stream_id;
-  // bpf_probe_read(&stream_id, sizeof(uint32_t), FrameHeader_ptr + 8);
+  uint32_t stream_id;
+  bpf_probe_read(&stream_id, sizeof(uint32_t), FrameHeader_ptr + 8);
 
-  // bpf_trace_printk("flags: %d\n", flags);
-  // bpf_trace_printk("end_stream: %d\n", flags & 0x1);
-  // bpf_trace_printk("stream_id: %d\n", stream_id);
-  // bpf_trace_printk("fields_len: %d\n", fields_len);
+  bpf_trace_printk("flags: %d\n", flags);
+  bpf_trace_printk("end_stream: %d\n", flags & 0x1);
+  bpf_trace_printk("stream_id: %d\n", stream_id);
+  bpf_trace_printk("fields_len: %d\n", fields_len);
 
   //submit_data_t(ctx, "flags", flags, "");
   //submit_data_t(ctx, "end_stream", flags & 0x1, "");
   //submit_data_t(ctx, "stream_id", stream_id, "");
   //submit_data_t(ctx, "fields_len", fields_len, "");
-  submit_headers(ctx, fields_ptr, fields_len);
+  submit_headers(ctx, fields_ptr, fields_len, stream_id);
   bpf_trace_printk("----------> probe_http2_client_operate_headers done!\n");
   return 0;
 }
@@ -281,9 +281,9 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   bpf_probe_read(&stream_id, sizeof(uint32_t), frame_header_ptr + 8);
 
   bpf_trace_printk("frame_type: %d\n", frame_type);
-  // bpf_trace_printk("flags: %d\n", flags);
-  // bpf_trace_printk("end_stream: %d\n", end_stream);
-  // bpf_trace_printk("stream_id: %d\n", stream_id);
+  bpf_trace_printk("flags: %d\n", flags);
+  bpf_trace_printk("end_stream: %d\n", end_stream);
+  bpf_trace_printk("stream_id: %d\n", stream_id);
 
   //submit_data_t(ctx, "flags", flags, "");
   //submit_data_t(ctx, "end_stream", end_stream, "");
@@ -308,7 +308,8 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
 
   int64_t data_len;
   bpf_probe_read(&data_len, sizeof(int64_t), data_frame_ptr + 16 + 8);
-
+  
+  bpf_trace_printk("------------> (Data Frame) frame_type: %d\n", frame_type);
   bpf_trace_printk("data_len: %d\n", data_len);
 
   // ------------------------------------------------------
@@ -330,6 +331,8 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   asm volatile("" : "+r"(data_buf_size_minus_1) :);
   data_buf_size = data_buf_size_minus_1 + 1;
 
+
+
   bpf_trace_printk("data_buf_size: %d\n", data_buf_size);
   if (data_buf_size_minus_1 < MAX_DATA_SIZE) {
     struct go_grpc_http2_header_event_t event = {};
@@ -338,6 +341,9 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
     bpf_trace_printk("data: %s\n", info.data); 
     //bpf_trace_printk("data: %s\n", event.name.msg);
   }
+
+  bpf_trace_printk("(DATA) stream_id: %d, time: %lldms \n", stream_id ,bpf_ktime_get_ns() / 1000000);
+
 
   bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n");
   return 0;
@@ -368,8 +374,8 @@ int probe_http2_framer_write_data(struct pt_regs* ctx) {
   bool end_stream = 0;
   bpf_probe_read(&end_stream, sizeof(end_stream), sp + 20);
 
-  // bpf_trace_printk("end_stream: %d\n", end_stream);
-  // bpf_trace_printk("stream_id: %d\n", stream_id);
+  bpf_trace_printk("end_stream: %d\n", end_stream);
+  bpf_trace_printk("stream_id: %d\n", stream_id);
 
   char* data_ptr = NULL;
   bpf_probe_read(&data_ptr, sizeof(data_ptr), sp + 24);
@@ -417,12 +423,12 @@ int probe_loopy_writer_write_header(struct pt_regs* ctx) {
   // http2 通过stream实现多路复用，用一个唯一ID标识
   // client 创建的stream，ID为奇数，server创建的为偶数 
   // stream ID 不可能被重复使用，如果一条连接上面 ID 分配完了，client 会新建一条连接
-  // uint32_t stream_id = 0;
-  // bpf_probe_read(&stream_id, sizeof(uint32_t), sp + 16);
+  uint32_t stream_id = 0;
+  bpf_probe_read(&stream_id, sizeof(uint32_t), sp + 16);
 
   // end stream 表示该stream不会再发送任何数据了
-  // bool end_stream = false;
-  // bpf_probe_read(&end_stream, sizeof(end_stream), sp + 20);
+  bool end_stream = false;
+  bpf_probe_read(&end_stream, sizeof(end_stream), sp + 20);
 
   void* fields_ptr;
 	const int kFieldsPtrOffset = 24;
@@ -432,10 +438,18 @@ int probe_loopy_writer_write_header(struct pt_regs* ctx) {
 	const int kFieldsLenOffset = 8;
   bpf_probe_read(&fields_len, sizeof(int64_t), sp + kFieldsPtrOffset + kFieldsLenOffset);
 
-  submit_headers(ctx, fields_ptr, fields_len);
-  // bpf_trace_printk("stream_id: %d\n", stream_id);
-  // bpf_trace_printk("end_stream: %d\n", end_stream);
+  submit_headers(ctx, fields_ptr, fields_len, stream_id);
+  bpf_trace_printk("stream_id: %d\n", stream_id);
+  bpf_trace_printk("end_stream: %d\n", end_stream);
 
   bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
   return 0;
+}
+
+void hello_SendMsg(struct pt_regs* ctx) {
+  bpf_trace_printk("================ hello_SendMsg\n");
+}
+
+void hello_RecvMsg(struct pt_regs* ctx) {
+  bpf_trace_printk("================ hello_RecvMsg\n");
 }
