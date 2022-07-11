@@ -44,7 +44,7 @@ func connectAndGreet(address, name string, count, sleep_millis int) {
 	c := pb.NewGreeterClient(conn)
 
 	for i := 0; i < count; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 3000*time.Millisecond)
 		defer cancel()
 		r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
 		if err != nil {
