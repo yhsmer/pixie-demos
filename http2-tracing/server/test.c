@@ -1,6 +1,9 @@
 #include <uapi/linux/ptrace.h>
 #include <net/sock.h>
 #include <linux/fdtable.h>
+#include <net/inet_sock.h>
+
+#define BPF_DEBUG
 
 #ifdef memset
 #undef memset
@@ -12,6 +15,16 @@
 		    bpf_probe_read(&_val, sizeof(_val), &P);	\
 		    _val;					\
 		 })
+
+#ifdef BPF_DEBUG
+#define bpf_printk(fmt, ...)					\
+	do {							\
+		char s[] = fmt;					\
+		bpf_trace_printk(s, sizeof(s), ##__VA_ARGS__);	\
+	} while (0)
+#else
+#define bpf_printk(fmt, ...)
+#endif
 
 enum location_type_t {
   kLocationTypeInvalid = 0,
@@ -270,19 +283,24 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
     return -1;
   }
 
-  unsigned short num;
-  num = _READ(sk->sk_num);
-  bpf_trace_printk("Port: %d\n", num);
-	// struct inet_sock *inet;
-  // inet = inet_sk(sk);
+	const struct inet_sock *inet = inet_sk(sk);
+  u16 sport = 0;
+	u16 dport = 0;
+	u32 saddr = 0;
+	u32 daddr = 0;
+  sport = _READ(inet->inet_sport);
+  sport = ntohs(sport);
+  dport = _READ(inet->inet_dport);
+  dport = ntohs(dport);
+	saddr = _READ(inet->inet_saddr);
+  saddr = ntohl(saddr);
+	daddr = _READ(inet->inet_daddr);
+  daddr = ntohl(daddr);
 
-  // u32 dip;
-  // dip = _READ(inet->daddr)
 
-  // u16 num;
-  // num = _READ(inet->num);
-	// bpf_trace_printk("dip: %pI4, dip: %d \n", dip, num);
-
-
+  bpf_trace_printk("sport: %u\n", sport);
+  bpf_trace_printk("dport: %u\n", dport);
+  bpf_trace_printk("saddr: %u\n", saddr);
+  bpf_trace_printk("daddr: %u\n", daddr);
   return 0;
 }
