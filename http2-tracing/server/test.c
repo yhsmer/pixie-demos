@@ -1,5 +1,17 @@
 #include <uapi/linux/ptrace.h>
 #include <net/sock.h>
+#include <linux/fdtable.h>
+
+#ifdef memset
+#undef memset
+#endif
+#define memset __builtin_memset
+
+#define _READ(P) ({ typeof(P) _val;				\
+		    memset(&_val, 0, sizeof(_val));		\
+		    bpf_probe_read(&_val, sizeof(_val), &P);	\
+		    _val;					\
+		 })
 
 enum location_type_t {
   kLocationTypeInvalid = 0,
@@ -61,6 +73,57 @@ static __inline void assign_arg(void* arg, size_t arg_size, struct location_t lo
       bpf_probe_read(arg, arg_size, (char*)regs + loc.offset);
     }
   }
+}
+
+
+// test for socket
+static __always_inline struct file *bpf_fget(int fd)
+{
+	struct task_struct *task;
+	struct files_struct *files;
+	struct fdtable *fdt;
+	int max_fds;
+	struct file **fds;
+	struct file *fil;
+
+	task = (struct task_struct *)bpf_get_current_task();
+	if (!task)
+		return NULL;
+
+	files = _READ(task->files);
+	if (!files)
+		return NULL;
+
+	fdt = _READ(files->fdt);
+	if (!fdt)
+		return NULL;
+
+	max_fds = _READ(fdt->max_fds);
+	if (fd >= max_fds)
+		return NULL;
+
+	fds = _READ(fdt->fd);
+	fil = _READ(fds[fd]);
+
+	return fil;
+}
+
+static __always_inline struct socket *bpf_sockfd_lookup(int fd)
+{
+	struct file *file;
+	struct socket *sock;
+
+	file = bpf_fget(fd);
+	if (!file)
+		return NULL;
+
+	sock = _READ(file->private_data);
+	return sock;
+}
+
+static void test_fd(int fd){
+    struct socket *socket;
+    socket = bpf_sockfd_lookup(fd);
 }
 
 // ----------------------------------------------------
@@ -191,6 +254,35 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
 	// int err, fput_needed;
 
 	// sock = sockfd_lookup_light(fd, &err, &fput_needed);
+  
+  struct socket *socket;
+  socket = bpf_sockfd_lookup(fd);
+  if(!socket){
+    bpf_trace_printk("Get socket error in server\n\n");
+    return -1;
+  }
+  bpf_trace_printk("state: %d\n", socket->state);
+
+  struct sock *sk;
+  sk = _READ(socket->sk);
+	if (!sk){
+    bpf_trace_printk("Read sock from socket error in server\n\n");
+    return -1;
+  }
+
+  unsigned short num;
+  num = _READ(sk->sk_num);
+  bpf_trace_printk("Port: %d\n", num);
+	// struct inet_sock *inet;
+  // inet = inet_sk(sk);
+
+  // u32 dip;
+  // dip = _READ(inet->daddr)
+
+  // u16 num;
+  // num = _READ(inet->num);
+	// bpf_trace_printk("dip: %pI4, dip: %d \n", dip, num);
+
 
   return 0;
 }
