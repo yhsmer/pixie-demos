@@ -7,18 +7,15 @@ bpf_source = f.read()
 
 bpf = BPF(text=bpf_source)
 
-bpf.attach_uprobe(name="./grpc_client", sym="google.golang.org/grpc.(*clientStream).SendMsg", fn_name="hello_SendMsg")
-bpf.attach_uprobe(name="./grpc_client", sym="google.golang.org/grpc.(*clientStream).RecvMsg", fn_name="hello_RecvMsg")
+# # writes HTTP2 headers
+# bpf.attach_uprobe(name="./grpc_client", sym="google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader", fn_name="probe_loopy_writer_write_header")
 
-# writes HTTP2 headers
-bpf.attach_uprobe(name="./grpc_client", sym="google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader", fn_name="probe_loopy_writer_write_header")
+# # processes HTTP2 headers of the received responses.
+# # Probe for the golang.org/x/net/http2 library's header reader (client-side).
+# bpf.attach_uprobe(name="./grpc_client", sym="google.golang.org/grpc/internal/transport.(*http2Client).operateHeaders", fn_name="probe_http2_client_operate_headers")
 
-# processes HTTP2 headers of the received responses.
-# Probe for the golang.org/x/net/http2 library's header reader (client-side).
-bpf.attach_uprobe(name="./grpc_client", sym="google.golang.org/grpc/internal/transport.(*http2Client).operateHeaders", fn_name="probe_http2_client_operate_headers")
-
-# Probe for the hpack's header encoder.
-bpf.attach_uprobe(name="./grpc_client", sym="golang.org/x/net/http2/hpack.(*Encoder).WriteField", fn_name="probe_hpack_header_encoder")
+# # Probe for the hpack's header encoder.
+# bpf.attach_uprobe(name="./grpc_client", sym="golang.org/x/net/http2/hpack.(*Encoder).WriteField", fn_name="probe_hpack_header_encoder")
 
 # Probes golang.org/x/net/http2.Framer for payload.
 # As a proxy for the return probe on ReadFrame(), we currently probe checkFrameOrder,
@@ -29,10 +26,10 @@ bpf.attach_uprobe(name="./grpc_client", sym="golang.org/x/net/http2/hpack.(*Enco
 # read received data frame only
 bpf.attach_uprobe(name="./grpc_client", sym="golang.org/x/net/http2.(*Framer).checkFrameOrder", fn_name="probe_http2_framer_check_frame_order")
 
-# padding
-# Probe for the golang.org/x/net/http2 library's frame writer
-# WriteDataPadded writes a DATA frame with optional padding.
-bpf.attach_uprobe(name="./grpc_client", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
+# # padding
+# # Probe for the golang.org/x/net/http2 library's frame writer
+# # WriteDataPadded writes a DATA frame with optional padding.
+# bpf.attach_uprobe(name="./grpc_client", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
 
 output = 1;
 if output:

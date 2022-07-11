@@ -345,7 +345,7 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   bpf_trace_printk("(DATA) stream_id: %d, time: %lldms \n", stream_id ,bpf_ktime_get_ns() / 1000000);
 
 
-  bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n");
+  bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n\n");
   return 0;
 }
 
@@ -444,12 +444,4 @@ int probe_loopy_writer_write_header(struct pt_regs* ctx) {
 
   bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
   return 0;
-}
-
-void hello_SendMsg(struct pt_regs* ctx) {
-  bpf_trace_printk("================ hello_SendMsg\n");
-}
-
-void hello_RecvMsg(struct pt_regs* ctx) {
-  bpf_trace_printk("================ hello_RecvMsg\n");
 }

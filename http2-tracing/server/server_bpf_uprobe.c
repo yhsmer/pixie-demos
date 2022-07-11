@@ -170,7 +170,6 @@ type HeaderField struct {
 // 服务端此函数接受明文header字段并将它们发送到内部缓冲区。函数签名和参数的类型定义是稳定的，自2018 年以来没有改变。
 // 任务是读取第三个参数的内容hf，它是HeaderField. 我们使用dlv调试器计算出嵌套数据元素的偏移量，从堆栈中读取数据
 int probe_loopy_writer_write_header(struct pt_regs* ctx) {
-  
   uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
   bpf_trace_printk("tgid: %d\n", tgid);
 
@@ -337,10 +336,10 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   void* framer_ptr = NULL;
   bpf_probe_read(&framer_ptr, sizeof(framer_ptr), sp + 8);
 
-  // int32_t fd = get_fd_from_http2_Framer(framer_ptr);
-  // if (fd == -1) {
-  //   return 0;
-  // }
+  int32_t fd = get_fd_from_http2_Framer(framer_ptr);
+  if (fd == -1) {
+    return 0;
+  }
 
   struct go_interface frame_interface = {};
   bpf_probe_read(&frame_interface, sizeof(frame_interface), sp + 16);
@@ -424,7 +423,7 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
     bpf_trace_printk("data: %s\n", info.data); 
   }
 
-  bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n");
+  bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n\n");
   return 0;
 }
 
@@ -485,10 +484,44 @@ int probe_http2_framer_write_data(struct pt_regs* ctx) {
   return 0;
 }
 
-void hello_SendMsg(struct pt_regs* ctx) {
-  bpf_trace_printk("================ hello_SendMsg\n");
-}
 
-void hello_RecvMsg(struct pt_regs* ctx) {
-  bpf_trace_printk("================ hello_RecvMsg\n");
-}
+
+#ifdef memset
+#undef memset
+#endif
+#define memset __builtin_memset
+
+struct sys_enter_args {
+	unsigned long regs;
+	unsigned long id;
+};
+
+// #ifdef BPF_SUPPORTS_RAW_TRACEPOINTS
+// struct sys_enter_args {
+// 	unsigned long regs;
+// 	unsigned long id;
+// };
+// #else
+// struct sys_enter_args {
+// 	__u64 pad;
+// 	long id;
+// 	unsigned long args[6];
+// };
+// #endif
+
+#define _READ(P) ({ typeof(P) _val;				\
+		    memset(&_val, 0, sizeof(_val));		\
+		    bpf_probe_read(&_val, sizeof(_val), &P);	\
+		    _val;					\
+		 })
+
+int test(struct pt_regs* ctx) {
+  bpf_trace_printk("test fd.....\n");
+  unsigned long arg;
+
+	struct sys_enter_args *args = (struct sys_enter_args *)ctx;
+	struct pt_regs *regs = (struct pt_regs *)args->regs;
+  arg = _READ(regs->di);
+  bpf_trace_printk("fd: %lu\n", arg);
+  return 0;
+} 
