@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 from bcc import BPF
 
-f = open("test.c", encoding="utf-8")
+f = open("socket.c", encoding="utf-8")
 bpf_source = f.read()
 
 bpf = BPF(text=bpf_source)
@@ -12,3 +12,8 @@ bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).ch
 
 
 bpf.trace_print()
+
+"""
+aliyun 内网IP 172.19.238.118 对应int值2886987382
+海创园 公网IP 60.191.18.194 对应int值1019155138
+"""

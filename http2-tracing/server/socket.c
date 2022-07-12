@@ -10,6 +10,7 @@
 #endif
 #define memset __builtin_memset
 
+// 将_val定义成P指向的类型, typeof获取类型
 #define _READ(P) ({ typeof(P) _val;				\
 		    memset(&_val, 0, sizeof(_val));		\
 		    bpf_probe_read(&_val, sizeof(_val), &P);	\
@@ -296,7 +297,6 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   saddr = ntohl(saddr);
 	daddr = _READ(inet->inet_daddr);
   daddr = ntohl(daddr);
-
 
   bpf_trace_printk("sport: %u\n", sport);
   bpf_trace_printk("dport: %u\n", dport);
