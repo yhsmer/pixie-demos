@@ -242,10 +242,6 @@ static __inline int32_t get_fd_from_http2_Framer(const void* framer_ptr) {
 }
 
 int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
-  // ---------------------------------------------
-  // Extract arguments
-  // ---------------------------------------------
-
   const void* sp = (const void*)ctx->sp;
 
   uint64_t* regs = go_regabi_regs(ctx);
@@ -269,38 +265,38 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
 
 	// sock = sockfd_lookup_light(fd, &err, &fput_needed);
   
-  struct socket *socket;
-  socket = bpf_sockfd_lookup(fd);
-  if(!socket){
-    bpf_trace_printk("Get socket error in server\n\n");
-    return -1;
-  }
-  bpf_trace_printk("state: %d\n", socket->state);
+    struct socket *socket;
+    socket = bpf_sockfd_lookup(fd);
+    if(!socket){
+      bpf_trace_printk("Get socket error in server\n\n");
+      return -1;
+    }
+    bpf_trace_printk("state: %d\n", socket->state);
 
-  struct sock *sk;
-  sk = _READ(socket->sk);
-	if (!sk){
-    bpf_trace_printk("Read sock from socket error in server\n\n");
-    return -1;
-  }
+    struct sock *sk;
+    sk = _READ(socket->sk);
+    if (!sk){
+      bpf_trace_printk("Read sock from socket error in server\n\n");
+      return -1;
+    }
 
-	const struct inet_sock *inet = inet_sk(sk);
-  u16 sport = 0;
-	u16 dport = 0;
-	u32 saddr = 0;
-	u32 daddr = 0;
-  sport = _READ(inet->inet_sport);
-  sport = ntohs(sport);
-  dport = _READ(inet->inet_dport);
-  dport = ntohs(dport);
-	saddr = _READ(inet->inet_saddr);
-  saddr = ntohl(saddr);
-	daddr = _READ(inet->inet_daddr);
-  daddr = ntohl(daddr);
+    const struct inet_sock *inet = inet_sk(sk);
+    u16 sport = 0;
+    u16 dport = 0;
+    u32 saddr = 0;
+    u32 daddr = 0;
+    sport = _READ(inet->inet_sport);
+    sport = ntohs(sport);
+    dport = _READ(inet->inet_dport);
+    dport = ntohs(dport);
+    saddr = _READ(inet->inet_saddr);
+    saddr = ntohl(saddr);
+    daddr = _READ(inet->inet_daddr);
+    daddr = ntohl(daddr);
 
-  bpf_trace_printk("sport: %u\n", sport);
-  bpf_trace_printk("dport: %u\n", dport);
-  bpf_trace_printk("saddr: %u\n", saddr);
-  bpf_trace_printk("daddr: %u\n", daddr);
+    bpf_trace_printk("sport: %u\n", sport);
+    bpf_trace_printk("dport: %u\n", dport);
+    bpf_trace_printk("saddr: %u\n", saddr);
+    bpf_trace_printk("daddr: %u\n", daddr);
   return 0;
 }

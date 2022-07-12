@@ -220,9 +220,15 @@ int probe_loopy_writer_write_header(struct pt_regs* ctx) {
   return 0;
 }
 
-// Signature: func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream),
-// traceCtx func(context.Context, string) context.Context)
 // 跟踪在 gRPC 服务端收到的传入标头，operateHeaders 解析 Headers 帧
+// Probe for the golang.org/x/net/http2 library's header reader (server-side).
+//
+// Function signature:
+//   func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream),
+//                                        traceCtx func(context.Context, string) context.Context
+//                                        (fatal bool)
+// Symbol:
+//   google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders
 int probe_http2_server_operate_headers(struct pt_regs* ctx) {
   uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
   bpf_trace_printk("tgid: %d\n", tgid);
@@ -336,10 +342,10 @@ int probe_http2_framer_check_frame_order(struct pt_regs* ctx) {
   void* framer_ptr = NULL;
   bpf_probe_read(&framer_ptr, sizeof(framer_ptr), sp + 8);
 
-  int32_t fd = get_fd_from_http2_Framer(framer_ptr);
-  if (fd == -1) {
-    return 0;
-  }
+  // int32_t fd = get_fd_from_http2_Framer(framer_ptr);
+  // if (fd == -1) {
+  //   return 0;
+  // }
 
   struct go_interface frame_interface = {};
   bpf_probe_read(&frame_interface, sizeof(frame_interface), sp + 16);
@@ -460,6 +466,9 @@ int probe_http2_framer_write_data(struct pt_regs* ctx) {
 
   int64_t data_len = 0;
   bpf_probe_read(&data_len, sizeof(data_len), sp + 32);
+
+  bpf_trace_printk("probe_http2_framer_write_data ::: data_len: %d\n", data_len);
+
 
   struct go_grpc_data_event_t info = {};
 

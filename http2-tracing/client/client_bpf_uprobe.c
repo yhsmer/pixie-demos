@@ -383,6 +383,8 @@ int probe_http2_framer_write_data(struct pt_regs* ctx) {
   int64_t data_len = 0;
   bpf_probe_read(&data_len, sizeof(data_len), sp + 32);
 
+  bpf_trace_printk("probe_http2_framer_write_data ::: data_len: %d\n", data_len);
+
   struct go_grpc_data_event_t info = {};
 
   uint32_t data_buf_size = min(data_len, MAX_DATA_SIZE);

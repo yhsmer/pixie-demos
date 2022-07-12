@@ -26,10 +26,11 @@ bpf = BPF(text=bpf_source)
 # read received data frame only
 bpf.attach_uprobe(name="./grpc_client", sym="golang.org/x/net/http2.(*Framer).checkFrameOrder", fn_name="probe_http2_framer_check_frame_order")
 
-# # padding
-# # Probe for the golang.org/x/net/http2 library's frame writer
-# # WriteDataPadded writes a DATA frame with optional padding.
-# bpf.attach_uprobe(name="./grpc_client", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
+# padding
+# Probe for the golang.org/x/net/http2 library's frame writer
+# WriteDataPadded writes a DATA frame with optional padding.
+# 获取发送的data len
+bpf.attach_uprobe(name="./grpc_client", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
 
 output = 1;
 if output:

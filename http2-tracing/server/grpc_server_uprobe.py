@@ -6,15 +6,15 @@ bpf_source = f.read()
 
 bpf = BPF(text=bpf_source)
 
-# (*loopyWriter).writeHeader() inside gRPC-go, which writes HTTP2 response headers
-bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader", fn_name="probe_loopy_writer_write_header")
-bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader", fn_name="test")
+# # (*loopyWriter).writeHeader() inside gRPC-go, which writes HTTP2 response headers
+# bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader", fn_name="probe_loopy_writer_write_header")
+# bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader", fn_name="test")
 
 # # Probe for the golang.org/x/net/http2 library's request header reader (server-side)
 # bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders", fn_name="probe_http2_server_operate_headers")
 
-# # Probe for the hpack's header encoder.
-# bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2/hpack.(*Encoder).WriteField", fn_name="probe_hpack_header_encoder")
+# Probe for the hpack's header encoder.
+bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2/hpack.(*Encoder).WriteField", fn_name="probe_hpack_header_encoder")
 
 # Probes golang.org/x/net/http2.Framer for payload.
 # As a proxy for the return probe on ReadFrame(), we currently probe checkFrameOrder,
@@ -42,8 +42,11 @@ bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/tra
 	http2_server.go:639	0x746b37	e824ccffff			call $google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders
 '''
 
-# # Probe for the golang.org/x/net/http2 library's frame writer
-# # WriteDataPadded writes a DATA frame with optional padding.
+# padding
+# Probe for the golang.org/x/net/http2 library's frame writer
+# WriteDataPadded writes a DATA frame with optional padding.
 # bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
 
 bpf.trace_print()
+
+# data req 12 resp 18
