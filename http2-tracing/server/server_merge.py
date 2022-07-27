@@ -11,7 +11,7 @@ bpf = BPF(text=bpf_source)
 # 服务端此函数接受明文header字段并将它们发送到内部缓冲区。函数签名和参数的类型定义是稳定的，自2018 年以来没有改变。
 # 任务是读取第三个参数的内容hf，它是HeaderField. 我们使用dlv调试器计算出嵌套数据元素的偏移量，从堆栈中读取数据
 
-# bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader", fn_name="probe_loopy_writer_write_header")
+bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*loopyWriter).writeHeader", fn_name="probe_loopy_writer_write_header")
 
 # 跟踪在 gRPC 服务端收到的传入标头，operateHeaders 解析 Headers 帧
 # Probe for the golang.org/x/net/http2 library's header reader (server-side).
@@ -23,7 +23,7 @@ bpf = BPF(text=bpf_source)
 # Symbol:
 #   google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders
 
-# bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders", fn_name="probe_http2_server_operate_headers")
+bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders", fn_name="probe_http2_server_operate_headers")
 
 # Verified to be stable from at least go1.6 to t go.1.13.
 # Probe for the hpack's header encoder.
@@ -50,7 +50,7 @@ bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2/hpack.(*Enco
 # retprobe 主要用于探测函数返回值，以及计算函数耗时
 # read received data frame only
 
-# bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).checkFrameOrder", fn_name="probe_http2_framer_check_frame_order")
+bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).checkFrameOrder", fn_name="probe_http2_framer_check_frame_order")
 
 # Verified to be stable from go1.7 to t go.1.13.
 # func (f *Framer) WriteDataPadded(streamID uint32, endStream bool, data, pad []byte) error
@@ -58,7 +58,7 @@ bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2/hpack.(*Enco
 # Probe for the golang.org/x/net/http2 library's frame writer
 # WriteDataPadded writes a DATA frame with optional padding.
 
-# bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
+bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
 
 bpf.trace_print()
 # data req 12 resp 18

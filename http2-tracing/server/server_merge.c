@@ -284,8 +284,9 @@ int probe_loopy_writer_write_header(struct pt_regs *ctx)
     struct go_grpc_framer_t go_grpc_framer;
     bpf_probe_read(&go_grpc_framer, sizeof(go_grpc_framer), framer_ptr);
 
+    // 这里的fd获取也是正常的，但是probe_http2_framer_check_frame_order同样也能获取到fd，所以这里不重复获取fd
     // const int32_t fd = get_fd_from_http2_Framer(go_grpc_framer.http2_framer);
-    // bpf_trace_printk("fd: %d", fd);
+    // bpf_trace_printk("fd: %d\n", fd);
     // if (fd == kInvalidFD) {
     //   return 0;
     // }
@@ -333,6 +334,12 @@ int probe_http2_server_operate_headers(struct pt_regs *ctx)
 
 int probe_hpack_header_encoder(struct pt_regs *ctx)
 {
+    uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
+    bpf_trace_printk("tgid: %d\n", tgid);
+
+    u32 pid = bpf_get_current_pid_tgid();
+    bpf_trace_printk("pid: %d\n", pid);
+    
     const void *sp = (const void *)ctx->sp;
 
     void *encoder_ptr = NULL;
@@ -359,6 +366,12 @@ int probe_hpack_header_encoder(struct pt_regs *ctx)
 
 int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
 {
+    uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
+    bpf_trace_printk("tgid: %d\n", tgid);
+
+    u32 pid = bpf_get_current_pid_tgid();
+    bpf_trace_printk("pid: %d\n", pid);
+
     const void *sp = (const void *)ctx->sp;
 
     struct go_interface frame_interface = {};
@@ -450,6 +463,12 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
 
 int probe_http2_framer_write_data(struct pt_regs *ctx)
 {
+    uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
+    bpf_trace_printk("tgid: %d\n", tgid);
+
+    u32 pid = bpf_get_current_pid_tgid();
+    bpf_trace_printk("pid: %d\n", pid);
+    
     const void *sp = (const void *)ctx->sp;
 
     uint32_t stream_id = 0;
