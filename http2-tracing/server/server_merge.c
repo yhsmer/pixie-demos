@@ -365,13 +365,7 @@ int probe_hpack_header_encoder(struct pt_regs *ctx)
 }
 
 int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
-{
-    uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
-    bpf_trace_printk("tgid: %d\n", tgid);
-
-    u32 pid = bpf_get_current_pid_tgid();
-    bpf_trace_printk("pid: %d\n", pid);
-
+{ 
     const void *sp = (const void *)ctx->sp;
 
     struct go_interface frame_interface = {};
@@ -384,6 +378,12 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
     // Consider only data frames (0)
     if (frame_type != 0)
         return 0;
+
+    uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
+    bpf_trace_printk("tgid: %d\n", tgid);
+
+    u32 pid = bpf_get_current_pid_tgid();
+    bpf_trace_printk("pid: %d\n", pid);
 
     // All Frame types start with a frame header, so this is safe.
     // TODO(oazizi): Is there a more robust way based on DWARF info.

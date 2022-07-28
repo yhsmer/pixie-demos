@@ -254,10 +254,10 @@ static void gostring_copy_header_field(struct header_field_t *dst, struct gostri
 int probe_loopy_writer_write_header(struct pt_regs *ctx)
 {
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
-    bpf_trace_printk("tgid: %d\n", tgid);
+    bpf_trace_printk("probe_loopy_writer_write_header: tgid: %d\n", tgid);
 
     u32 pid = bpf_get_current_pid_tgid();
-    bpf_trace_printk("pid: %d\n", pid);
+    bpf_trace_printk("probe_loopy_writer_write_header: pid: %d\n", pid);
 
     const void *sp = (const void *)ctx->sp;
 
@@ -300,10 +300,10 @@ int probe_loopy_writer_write_header(struct pt_regs *ctx)
 int probe_http2_client_operate_headers(struct pt_regs *ctx)
 {
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
-    bpf_trace_printk("tgid: %d\n", tgid);
+    bpf_trace_printk("probe_http2_client_operate_headers: tgid: %d\n", tgid);
 
     u32 pid = bpf_get_current_pid_tgid();
-    bpf_trace_printk("pid: %d\n", pid);
+    bpf_trace_printk("probe_http2_client_operate_headers:  pid: %d\n", pid);
 
     const void *sp = (const void *)ctx->sp;
 
@@ -333,6 +333,12 @@ int probe_http2_client_operate_headers(struct pt_regs *ctx)
 
 int probe_hpack_header_encoder(struct pt_regs *ctx)
 {
+    uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
+    bpf_trace_printk("probe_hpack_header_encoder: tgid: %d\n", tgid);
+
+    u32 pid = bpf_get_current_pid_tgid();
+    bpf_trace_printk("probe_hpack_header_encoder: pid: %d\n", pid);
+    
     const void *sp = (const void *)ctx->sp;
 
     void *encoder_ptr = NULL;
@@ -358,7 +364,7 @@ int probe_hpack_header_encoder(struct pt_regs *ctx)
 }
 
 int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
-{
+{   
     const void *sp = (const void *)ctx->sp;
 
     struct go_interface frame_interface = {};
@@ -371,6 +377,13 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
     // Consider only data frames (0)
     if (frame_type != 0)
         return 0;
+    
+    uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
+    bpf_trace_printk("probe_http2_framer_check_frame_order: tgid: %d\n", tgid);
+
+    u32 pid = bpf_get_current_pid_tgid();
+    bpf_trace_printk("probe_http2_framer_check_frame_order: pid: %d\n", pid);
+
 
     // All Frame types start with a frame header, so this is safe.
     // TODO(oazizi): Is there a more robust way based on DWARF info.
@@ -449,7 +462,13 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
 }
 
 int probe_http2_framer_write_data(struct pt_regs *ctx)
-{
+{   
+    uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
+    bpf_trace_printk("probe_http2_framer_write_data: tgid: %d\n", tgid);
+
+    u32 pid = bpf_get_current_pid_tgid();
+    bpf_trace_printk("probe_http2_framer_write_data: pid: %d\n", pid);
+
     const void *sp = (const void *)ctx->sp;
 
     uint32_t stream_id = 0;
