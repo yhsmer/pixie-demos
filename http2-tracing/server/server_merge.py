@@ -62,7 +62,7 @@ bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).ch
 bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
 
 
-output = 1;
+output = 0;
 if output:
     bpf.trace_print()
 else:
