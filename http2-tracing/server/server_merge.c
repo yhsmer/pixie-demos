@@ -19,7 +19,7 @@
 
 #define MAX_HEADER_COUNT 64
 #define HEADER_FIELD_STR_SIZE 128
-
+BPF_PERF_OUTPUT(go_grpc_events);
 // --------------------------------------------- macro End   ---------------------------------------------
 
 // --------------------------------------------- Struct Begin ---------------------------------------------
@@ -74,6 +74,29 @@ struct go_grpc_framer_t
 
 // The BPF map used to store the registers of Go's register-based calling convention.
 BPF_PERCPU_ARRAY(regs_heap, struct go_regabi_regs, 1);
+
+struct grpc_event
+{
+    int pid;
+    int tgid;
+    int fd;
+    char remote_ip[128];
+    int remote_port;
+    int trace_role;
+    char content_type[30];
+    char req_method[10];
+    char req_path[50];
+    char req_status[10];
+    int req_body_size;
+    int reqsp_body_size;
+    int latency;
+};
+
+BPF_PERCPU_ARRAY(header_event_buffer_heap, struct grpc_event, 1);
+static __inline struct grpc_event* get_header_event() {
+  uint32_t kZero = 0;
+  return header_event_buffer_heap.lookup(&kZero);
+}
 
 // --------------------------------------------- Struct End   ---------------------------------------------
 
@@ -227,7 +250,6 @@ static void submit_headers(struct pt_regs *ctx, void *fields_ptr, int64_t fields
         copy_header_field(&event.name, header_field_ptr);
         copy_header_field(&event.value, header_field_ptr + 16);
 
-        // bpf_trace_printk("[name='%s' value='%s']\\n", event.name.msg, event.value.msg);
         bpf_trace_printk("name: %s\n", event.name.msg);
         bpf_trace_printk("value: %s\n", event.value.msg);
 
@@ -292,7 +314,7 @@ int probe_loopy_writer_write_header(struct pt_regs *ctx)
     // }
 
     submit_headers(ctx, fields_ptr, fields_len, stream_id);
-    bpf_trace_printk("stream_id: %d\n", stream_id);
+    // bpf_trace_printk("stream_id: %d\n", stream_id);
 
     bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
     return 0;
@@ -300,6 +322,7 @@ int probe_loopy_writer_write_header(struct pt_regs *ctx)
 
 int probe_http2_server_operate_headers(struct pt_regs *ctx)
 {
+
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
     bpf_trace_printk("tgid: %d\n", tgid);
 
@@ -334,6 +357,7 @@ int probe_http2_server_operate_headers(struct pt_regs *ctx)
 
 int probe_hpack_header_encoder(struct pt_regs *ctx)
 {
+
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
     bpf_trace_printk("tgid: %d\n", tgid);
 
@@ -365,7 +389,7 @@ int probe_hpack_header_encoder(struct pt_regs *ctx)
 }
 
 int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
-{ 
+{
     const void *sp = (const void *)ctx->sp;
 
     struct go_interface frame_interface = {};
@@ -376,8 +400,8 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
     bpf_probe_read(&frame_type, sizeof(uint8_t), frame_header_ptr + 1);
 
     // Consider only data frames (0)
-    if (frame_type != 0)
-        return 0;
+    // if (frame_type != 0)
+    //     return 0;
 
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
     bpf_trace_printk("tgid: %d\n", tgid);
@@ -463,6 +487,7 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
 
 int probe_http2_framer_write_data(struct pt_regs *ctx)
 {
+
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
     bpf_trace_printk("tgid: %d\n", tgid);
 
@@ -482,4 +507,9 @@ int probe_http2_framer_write_data(struct pt_regs *ctx)
     bpf_trace_printk("----------> probe_http2_framer_write_data done!\n");
     return 0;
 }
+
 // --------------------------------------------- Function End   ---------------------------------------------
+
+/*
+./ghz -c 10 -z 3m    --insecure    --proto ./greet.proto    --call greet.Greeter.SayHello    -d '{"name":"Joe"}'    172.19.238.118:50051
+*/
