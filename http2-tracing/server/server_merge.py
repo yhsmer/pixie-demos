@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
 from bcc import BPF
+from bcc.utils import printb
 
 f = open("server_merge.c", encoding="utf-8")
 bpf_source = f.read()
@@ -23,7 +24,7 @@ bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/tra
 # Symbol:
 #   google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders
 
-#bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders", fn_name="probe_http2_server_operate_headers")
+bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/transport.(*http2Server).operateHeaders", fn_name="probe_http2_server_operate_headers")
 
 # Verified to be stable from at least go1.6 to t go.1.13.
 # Probe for the hpack's header encoder.
@@ -50,8 +51,7 @@ bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/tra
 # retprobe 主要用于探测函数返回值，以及计算函数耗时
 # read received data frame only
 
-#bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).checkFrameOrder", fn_name="probe_http2_framer_check_frame_order")
-#bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).checkFrameOrder", fn_name="test")
+bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).checkFrameOrder", fn_name="probe_http2_framer_check_frame_order")
 
 # Verified to be stable from go1.7 to t go.1.13.
 # func (f *Framer) WriteDataPadded(streamID uint32, endStream bool, data, pad []byte) error
@@ -59,7 +59,65 @@ bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/tra
 # Probe for the golang.org/x/net/http2 library's frame writer
 # WriteDataPadded writes a DATA frame with optional padding.
 
-#bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
+bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
 
-bpf.trace_print()
+
+output = 1;
+if output:
+    bpf.trace_print()
+else:
+    print("%-20s %s" % ("[key]", "[value]"))
+
+    def print_event(cpu, data, size):
+        event = bpf["go_grpc_events"].event(data)
+        
+        printb(b"%-20s %d" % (b"trace_role", event.trace_role))
+        printb(b"%-20s %d" % (b"pid", event.pid))
+        printb(b"%-20s %d" % (b"tgid", event.tgid))
+
+        if event.fd != 0 :
+            printb(b"%-20s %d" % (b"fd", event.fd))
+        
+        if event.stream_id != 0 :
+            printb(b"%-20s %d" % (b"stream_id", event.stream_id))
+        
+        if event.remote_ip != 0:
+            printb(b"%-20s %d" % (b"remote_ip", event.remote_ip))
+
+        if event.remote_port != 0 :
+            printb(b"%-20s %d" % (b"remote_port", event.remote_port))
+
+        if len(event.content_type) != 0:
+            printb(b"%-20s %s" % (b"content_type", event.content_type))
+
+        if len(event.req_method) != 0:
+            printb(b"%-20s %s" % (b"req_method", event.req_method))
+        
+        if len(event.req_path) != 0:
+            printb(b"%-20s %s" % (b"req_path", event.req_path))
+
+        if len(event.req_status) != 0:
+            printb(b"%-20s %s" % (b"req_status", event.req_status))
+
+        if event.req_body_size != 0:
+            printb(b"%-20s %d" % (b"req_body_size", event.req_body_size))
+        
+        if event.reqsp_body_size != 0:
+            printb(b"%-20s %d" % (b"reqsp_body_size", event.reqsp_body_size))
+        
+        if event.timestamp_ns != 0:
+            printb(b"%-20s %d(ns)" % (b"timestamp_ns", event.timestamp_ns))
+        
+        if event.name_size != 0  and event.value_size != 0:
+            printb(b"%-20s %s" % (event.name_msg[: event.name_size], event.value_msg[: event.value_size]))
+        
+        print('')
+
+    # loop with callback to print_event
+    bpf["go_grpc_events"].open_perf_buffer(print_event)
+    while 1:
+        try:
+            bpf.perf_buffer_poll()
+        except KeyboardInterrupt:
+            exit()
 # data req 12 resp 18
