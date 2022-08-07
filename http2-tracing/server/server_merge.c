@@ -102,15 +102,17 @@ struct grpc_event
 // 创建数组映射，参数分别为name, value类型（key为数组下标），元素个数
 // 数组映射元素不可删除，只能更新
 BPF_PERCPU_ARRAY(header_event_buffer_heap, struct grpc_event, 1);
-static __inline struct grpc_event* get_header_event() {
-  uint32_t kZero = 0;
-  struct grpc_event* event = header_event_buffer_heap.lookup(&kZero);
-  if (event == NULL) {
+static __inline struct grpc_event *get_header_event()
+{
+    uint32_t kZero = 0;
+    struct grpc_event *event = header_event_buffer_heap.lookup(&kZero);
+    if (event == NULL)
+    {
         return NULL;
     }
-  memset(event, 0, sizeof(*event));
-  return event;
-//   return header_event_buffer_heap.lookup(&kZero);
+    memset(event, 0, sizeof(*event));
+    return event;
+    //   return header_event_buffer_heap.lookup(&kZero);
 }
 
 // --------------------------------------------- Struct End   ---------------------------------------------
@@ -198,7 +200,7 @@ static __always_inline struct socket *bpf_sockfd_lookup(int fd)
 }
 
 static __inline int32_t get_fd_from_conn_intf_core(struct go_interface conn_intf)
-{      
+{
     void *fd_ptr;
     bpf_probe_read(&fd_ptr, sizeof(fd_ptr), conn_intf.ptr);
 
@@ -248,7 +250,7 @@ static void copy_header_field(struct header_field_t *dst, const void *header_fie
 }
 
 static void copy_header_field_no_struct(char *dst, int *size, const void *header_field_ptr)
-{   
+{
     struct gostring str = {};
     bpf_probe_read(&str, sizeof(str), header_field_ptr);
     if (str.len <= 0)
@@ -264,18 +266,19 @@ static void copy_header_field_no_struct(char *dst, int *size, const void *header
 // Copies and submits content of an array of hpack.HeaderField to perf buffer.
 // perf Buffer是CPU的缓冲区，每个CPU有自己的perf Buffer，ring Buffer是多个CPU共用的一个缓冲区，perf Buffer性能弱于ring Buffer
 static void submit_headers(struct pt_regs *ctx, void *fields_ptr, int64_t fields_len, uint32_t stream_id)
-{   
+{
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
     // bpf_trace_printk("tgid: %d\n", tgid);
 
     u32 pid = bpf_get_current_pid_tgid();
     // bpf_trace_printk("pid: %d\n", pid);
-    
+
     // Size of the golang hpack.HeaderField struct.
     const size_t header_field_size = 40;
-    
-    struct grpc_event* event = get_header_event();
-    if (event == NULL) {
+
+    struct grpc_event *event = get_header_event();
+    if (event == NULL)
+    {
         return;
     }
 
@@ -289,7 +292,6 @@ static void submit_headers(struct pt_regs *ctx, void *fields_ptr, int64_t fields
     // bpf_trace_printk("(event): %d\n", event->tgid);
     // bpf_trace_printk("(event): %d\n", event->stream_id);
     // bpf_trace_printk("(event): %lldns\n", event->timestamp_ns);
-    
 
     for (size_t i = 0; i < MAX_HEADER_COUNT; ++i)
     {
@@ -312,7 +314,7 @@ static void submit_headers(struct pt_regs *ctx, void *fields_ptr, int64_t fields
 }
 
 static void gostring_copy_header_field(char *dst, int *size, struct gostring *src)
-{   
+{
     if (src->len <= 0)
     {
         *size = 0;
@@ -360,15 +362,16 @@ int probe_loopy_writer_write_header(struct pt_regs *ctx)
 
     // 这里的fd获取也是正常的，但是probe_http2_framer_check_frame_order同样也能获取到fd，所以这里不重复获取fd
     const int32_t fd = get_fd_from_http2_Framer(go_grpc_framer.http2_framer);
-    //bpf_trace_printk("fd: %d\n", fd);
-    if (fd == -1) {
-      return 0;
+    // bpf_trace_printk("fd: %d\n", fd);
+    if (fd == -1)
+    {
+        return 0;
     }
 
     submit_headers(ctx, fields_ptr, fields_len, stream_id);
     // bpf_trace_printk("stream_id: %d\n", stream_id);
 
-    //bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
+    // bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
     return 0;
 }
 
@@ -389,7 +392,7 @@ int probe_http2_server_operate_headers(struct pt_regs *ctx)
         return 0;
     }
 
-    void* http2_server_ptr = NULL;
+    void *http2_server_ptr = NULL;
     bpf_probe_read(&http2_server_ptr, sizeof(http2_server_ptr), sp + 8);
 
     void *frame_ptr;
@@ -399,12 +402,12 @@ int probe_http2_server_operate_headers(struct pt_regs *ctx)
     bpf_probe_read(&conn_intf, sizeof(conn_intf), http2_server_ptr + 32);
 
     const int32_t fd = get_fd_from_conn_intf(conn_intf);
-    if (fd == -1) {
+    if (fd == -1)
+    {
         bpf_trace_printk("fd: -1\n");
         return 0;
     }
     bpf_trace_printk("fd: %d\n", fd);
-
 
     void *fields_ptr;
     bpf_probe_read(&fields_ptr, sizeof(void *), frame_ptr + 8);
@@ -420,12 +423,7 @@ int probe_http2_server_operate_headers(struct pt_regs *ctx)
     uint32_t stream_id;
     bpf_probe_read(&stream_id, sizeof(uint32_t), FrameHeader_ptr + 8);
 
-    //bpf_trace_printk("stream_id: %d \n", stream_id);
-
-    
-    
-    
-
+    // bpf_trace_printk("stream_id: %d \n", stream_id);
 
     submit_headers(ctx, fields_ptr, fields_len, stream_id);
     bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
@@ -436,11 +434,11 @@ int probe_hpack_header_encoder(struct pt_regs *ctx)
 {
 
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
-    //bpf_trace_printk("tgid: %d\n", tgid);
+    // bpf_trace_printk("tgid: %d\n", tgid);
 
     u32 pid = bpf_get_current_pid_tgid();
-    //bpf_trace_printk("pid: %d\n", pid);
-    
+    // bpf_trace_printk("pid: %d\n", pid);
+
     const void *sp = (const void *)ctx->sp;
 
     void *encoder_ptr = NULL;
@@ -452,8 +450,9 @@ int probe_hpack_header_encoder(struct pt_regs *ctx)
     struct gostring value = {};
     bpf_probe_read(&value, sizeof(struct gostring), sp + 32);
 
-    struct grpc_event* event = get_header_event();
-    if (event == NULL) {
+    struct grpc_event *event = get_header_event();
+    if (event == NULL)
+    {
         return -1;
     }
 
@@ -468,7 +467,6 @@ int probe_hpack_header_encoder(struct pt_regs *ctx)
     // bpf_trace_printk("value: %s\n", event->value_msg);
     // bpf_trace_printk("value_size: %d\n", event->value_size);
 
-    
     event->trace_role = 2;
     event->pid = pid;
     event->tgid = tgid;
@@ -573,8 +571,9 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
     // bpf_trace_printk("saddr: %u\n", saddr);
     // bpf_trace_printk("daddr: %u\n", daddr);
 
-    struct grpc_event* event = get_header_event();
-    if (event == NULL) {
+    struct grpc_event *event = get_header_event();
+    if (event == NULL)
+    {
         return -1;
     }
 
@@ -589,7 +588,7 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
 
     go_grpc_events.perf_submit(ctx, event, sizeof(*event));
 
-    //bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n\n");
+    // bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n\n");
     return 0;
 }
 
@@ -600,7 +599,7 @@ int probe_http2_framer_write_data(struct pt_regs *ctx)
 
     u32 pid = bpf_get_current_pid_tgid();
     // bpf_trace_printk("pid: %d\n", pid);
-    
+
     const void *sp = (const void *)ctx->sp;
 
     uint32_t stream_id = 0;
@@ -611,18 +610,20 @@ int probe_http2_framer_write_data(struct pt_regs *ctx)
 
     // bpf_trace_printk("stream_id: %d\n", stream_id);
     // bpf_trace_printk("data_len: %d\n", data_len);
-    void* framer_ptr = NULL;
+    void *framer_ptr = NULL;
     bpf_probe_read(&framer_ptr, sizeof(framer_ptr), sp + 8);
 
     int32_t fd = get_fd_from_http2_Framer(framer_ptr);
-    if (fd == -1) {
+    if (fd == -1)
+    {
         bpf_trace_printk("fd: -1\n");
         return 0;
     }
     bpf_trace_printk("fd: %d\n", fd);
 
-    struct grpc_event* event = get_header_event();
-    if (event == NULL) {
+    struct grpc_event *event = get_header_event();
+    if (event == NULL)
+    {
         return -1;
     }
 
