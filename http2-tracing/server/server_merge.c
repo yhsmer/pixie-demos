@@ -104,7 +104,13 @@ struct grpc_event
 BPF_PERCPU_ARRAY(header_event_buffer_heap, struct grpc_event, 1);
 static __inline struct grpc_event* get_header_event() {
   uint32_t kZero = 0;
-  return header_event_buffer_heap.lookup(&kZero);
+  struct grpc_event* event = header_event_buffer_heap.lookup(&kZero);
+  if (event == NULL) {
+        return NULL;
+    }
+  memset(event, 0, sizeof(*event));
+  return event;
+//   return header_event_buffer_heap.lookup(&kZero);
 }
 
 // --------------------------------------------- Struct End   ---------------------------------------------
@@ -192,7 +198,7 @@ static __always_inline struct socket *bpf_sockfd_lookup(int fd)
 }
 
 static __inline int32_t get_fd_from_conn_intf_core(struct go_interface conn_intf)
-{
+{      
     void *fd_ptr;
     bpf_probe_read(&fd_ptr, sizeof(fd_ptr), conn_intf.ptr);
 
@@ -305,15 +311,16 @@ static void submit_headers(struct pt_regs *ctx, void *fields_ptr, int64_t fields
     // bpf_trace_printk("stream_id: %d, time: %lldns \n", stream_id, bpf_ktime_get_ns());
 }
 
-static void gostring_copy_header_field(struct header_field_t *dst, struct gostring *src)
-{
+static void gostring_copy_header_field(char *dst, int *size, struct gostring *src)
+{   
     if (src->len <= 0)
     {
-        dst->size = 0;
+        *size = 0;
         return;
     }
-    dst->size = min(src->len, (int64_t)HEADER_FIELD_STR_SIZE);
-    bpf_probe_read(dst->msg, dst->size, src->ptr);
+    *size = (int)min(src->len, (int64_t)HEADER_FIELD_STR_SIZE);
+    // bpf_trace_printk("size: %d\n", size);
+    bpf_probe_read(dst, *size, src->ptr);
 }
 // --------------------------------------------- Assist Function End   ---------------------------------------------
 
@@ -352,11 +359,11 @@ int probe_loopy_writer_write_header(struct pt_regs *ctx)
     bpf_probe_read(&go_grpc_framer, sizeof(go_grpc_framer), framer_ptr);
 
     // 这里的fd获取也是正常的，但是probe_http2_framer_check_frame_order同样也能获取到fd，所以这里不重复获取fd
-    // const int32_t fd = get_fd_from_http2_Framer(go_grpc_framer.http2_framer);
-    // bpf_trace_printk("fd: %d\n", fd);
-    // if (fd == kInvalidFD) {
-    //   return 0;
-    // }
+    const int32_t fd = get_fd_from_http2_Framer(go_grpc_framer.http2_framer);
+    //bpf_trace_printk("fd: %d\n", fd);
+    if (fd == -1) {
+      return 0;
+    }
 
     submit_headers(ctx, fields_ptr, fields_len, stream_id);
     // bpf_trace_printk("stream_id: %d\n", stream_id);
@@ -376,8 +383,28 @@ int probe_http2_server_operate_headers(struct pt_regs *ctx)
 
     const void *sp = (const void *)ctx->sp;
 
+    uint64_t *regs = go_regabi_regs(ctx);
+    if (regs == NULL)
+    {
+        return 0;
+    }
+
+    void* http2_server_ptr = NULL;
+    bpf_probe_read(&http2_server_ptr, sizeof(http2_server_ptr), sp + 8);
+
     void *frame_ptr;
     bpf_probe_read(&frame_ptr, sizeof(void *), sp + 16);
+
+    struct go_interface conn_intf;
+    bpf_probe_read(&conn_intf, sizeof(conn_intf), http2_server_ptr + 32);
+
+    const int32_t fd = get_fd_from_conn_intf(conn_intf);
+    if (fd == -1) {
+        bpf_trace_printk("fd: -1\n");
+        return 0;
+    }
+    bpf_trace_printk("fd: %d\n", fd);
+
 
     void *fields_ptr;
     bpf_probe_read(&fields_ptr, sizeof(void *), frame_ptr + 8);
@@ -395,8 +422,13 @@ int probe_http2_server_operate_headers(struct pt_regs *ctx)
 
     //bpf_trace_printk("stream_id: %d \n", stream_id);
 
+    
+    
+    
+
+
     submit_headers(ctx, fields_ptr, fields_len, stream_id);
-    //bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
+    bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
     return 0;
 }
 
@@ -404,10 +436,10 @@ int probe_hpack_header_encoder(struct pt_regs *ctx)
 {
 
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
-    bpf_trace_printk("tgid: %d\n", tgid);
+    //bpf_trace_printk("tgid: %d\n", tgid);
 
     u32 pid = bpf_get_current_pid_tgid();
-    bpf_trace_printk("pid: %d\n", pid);
+    //bpf_trace_printk("pid: %d\n", pid);
     
     const void *sp = (const void *)ctx->sp;
 
@@ -420,21 +452,36 @@ int probe_hpack_header_encoder(struct pt_regs *ctx)
     struct gostring value = {};
     bpf_probe_read(&value, sizeof(struct gostring), sp + 32);
 
-    struct go_grpc_http2_header_event_t event = {};
+    struct grpc_event* event = get_header_event();
+    if (event == NULL) {
+        return -1;
+    }
+
     struct gostring *name_ptr = &name;
     struct gostring *value_ptr = &value;
-    gostring_copy_header_field(&event.name, name_ptr);
-    gostring_copy_header_field(&event.value, value_ptr);
 
-    bpf_trace_printk("name: %s\n", event.name.msg);
-    bpf_trace_printk("value: %s\n", event.value.msg);
+    gostring_copy_header_field(&event->name_msg, &event->name_size, name_ptr);
+    gostring_copy_header_field(&event->value_msg, &event->value_size, value_ptr);
 
-    bpf_trace_printk("----------> probe_hpack_header_encoder done!\n");
+    // bpf_trace_printk("name: %s\n", event->name_msg);
+    // bpf_trace_printk("name_size: %d\n", event->name_size);
+    // bpf_trace_printk("value: %s\n", event->value_msg);
+    // bpf_trace_printk("value_size: %d\n", event->value_size);
+
+    
+    event->trace_role = 2;
+    event->pid = pid;
+    event->tgid = tgid;
+
+    go_grpc_events.perf_submit(ctx, event, sizeof(*event));
+
+    // bpf_trace_printk("----------> probe_hpack_header_encoder done!\n");
     return 0;
 }
 
 int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
 {
+
     const void *sp = (const void *)ctx->sp;
 
     struct go_interface frame_interface = {};
@@ -548,7 +595,6 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
 
 int probe_http2_framer_write_data(struct pt_regs *ctx)
 {
-
     uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
     // bpf_trace_printk("tgid: %d\n", tgid);
 
@@ -565,6 +611,15 @@ int probe_http2_framer_write_data(struct pt_regs *ctx)
 
     // bpf_trace_printk("stream_id: %d\n", stream_id);
     // bpf_trace_printk("data_len: %d\n", data_len);
+    void* framer_ptr = NULL;
+    bpf_probe_read(&framer_ptr, sizeof(framer_ptr), sp + 8);
+
+    int32_t fd = get_fd_from_http2_Framer(framer_ptr);
+    if (fd == -1) {
+        bpf_trace_printk("fd: -1\n");
+        return 0;
+    }
+    bpf_trace_printk("fd: %d\n", fd);
 
     struct grpc_event* event = get_header_event();
     if (event == NULL) {
@@ -575,15 +630,22 @@ int probe_http2_framer_write_data(struct pt_regs *ctx)
     event->pid = pid;
     event->tgid = tgid;
     event->stream_id = stream_id;
+    event->fd = fd;
     event->reqsp_body_size = data_len;
 
     go_grpc_events.perf_submit(ctx, event, sizeof(*event));
-    // bpf_trace_printk("----------> probe_http2_framer_write_data done!\n");
+    bpf_trace_printk("----------> probe_http2_framer_write_data done!\n");
     return 0;
 }
 
 // --------------------------------------------- Function End   ---------------------------------------------
 
 /*
+
 ./ghz -c 10 -z 3m    --insecure    --proto ./greet.proto    --call greet.Greeter.SayHello    -d '{"name":"Joe"}'    172.19.238.118:50051
+*/
+
+/*
+需要解决的问题：
+长连接还是短连接
 */

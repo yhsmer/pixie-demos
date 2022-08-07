@@ -40,7 +40,7 @@ bpf.attach_uprobe(name="./grpc_server", sym="google.golang.org/grpc/internal/tra
 # Symbol:
 #   golang.org/x/net/http2/hpack.(*Encoder).WriteField
 
-#bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2/hpack.(*Encoder).WriteField", fn_name="probe_hpack_header_encoder")
+bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2/hpack.(*Encoder).WriteField", fn_name="probe_hpack_header_encoder")
 
 # Verified to be stable from at least go1.6 to t go.1.13.
 # func (fr *Framer) checkFrameOrder(f Frame) error
@@ -62,7 +62,7 @@ bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).ch
 bpf.attach_uprobe(name="./grpc_server", sym="golang.org/x/net/http2.(*Framer).WriteDataPadded", fn_name="probe_http2_framer_write_data")
 
 
-output = 0;
+output = 0
 if output:
     bpf.trace_print()
 else:
