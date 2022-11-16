@@ -97,6 +97,7 @@ struct grpc_event
     char name_msg[HEADER_FIELD_STR_SIZE];
     int value_size;
     char value_msg[HEADER_FIELD_STR_SIZE];
+    char probe_type[50];
 };
 
 // 创建数组映射，参数分别为name, value类型（key为数组下标），元素个数
@@ -329,12 +330,6 @@ static void gostring_copy_header_field(char *dst, int *size, struct gostring *sr
 // --------------------------------------------- Function Begin ---------------------------------------------
 int probe_loopy_writer_write_header(struct pt_regs *ctx)
 {
-    // uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
-    // bpf_trace_printk("tgid: %d\n", tgid);
-
-    // u32 pid = bpf_get_current_pid_tgid();
-    // bpf_trace_printk("pid: %d\n", pid);
-
     const void *sp = (const void *)ctx->sp;
 
     // http2 通过stream实现多路复用，用一个唯一ID标识
@@ -360,30 +355,22 @@ int probe_loopy_writer_write_header(struct pt_regs *ctx)
     struct go_grpc_framer_t go_grpc_framer;
     bpf_probe_read(&go_grpc_framer, sizeof(go_grpc_framer), framer_ptr);
 
-    // 这里的fd获取也是正常的，但是probe_http2_framer_check_frame_order同样也能获取到fd，所以这里不重复获取fd
     const int32_t fd = get_fd_from_http2_Framer(go_grpc_framer.http2_framer);
-    // bpf_trace_printk("fd: %d\n", fd);
+    bpf_trace_printk("fd: %d\n", fd);
     if (fd == -1)
     {
         return 0;
     }
 
     submit_headers(ctx, fields_ptr, fields_len, stream_id);
-    // bpf_trace_printk("stream_id: %d\n", stream_id);
+    bpf_trace_printk("stream_id: %d\n", stream_id);
 
-    // bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
+    bpf_trace_printk("----------> probe_loopy_writer_write_header done!\n");
     return 0;
 }
 
 int probe_http2_server_operate_headers(struct pt_regs *ctx)
 {
-
-    // uint32_t tgid = bpf_get_current_pid_tgid() >> 32;
-    // bpf_trace_printk("tgid: %d\n", tgid);
-
-    // u32 pid = bpf_get_current_pid_tgid();
-    // bpf_trace_printk("pid: %d\n", pid);
-
     const void *sp = (const void *)ctx->sp;
 
     uint64_t *regs = go_regabi_regs(ctx);
@@ -423,7 +410,7 @@ int probe_http2_server_operate_headers(struct pt_regs *ctx)
     uint32_t stream_id;
     bpf_probe_read(&stream_id, sizeof(uint32_t), FrameHeader_ptr + 8);
 
-    // bpf_trace_printk("stream_id: %d \n", stream_id);
+    bpf_trace_printk("stream_id: %d \n", stream_id);
 
     submit_headers(ctx, fields_ptr, fields_len, stream_id);
     bpf_trace_printk("----------> probe_http2_server_operate_headers done!\n");
@@ -563,9 +550,9 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
     daddr = _READ(inet->inet_daddr);
     daddr = ntohl(daddr);
 
-    // bpf_trace_printk("stream_id: %d\n", stream_id);
+    bpf_trace_printk("stream_id: %d\n", stream_id);
     // bpf_trace_printk("data_len: %d\n", data_len);
-    // bpf_trace_printk("fd (Frame): %d\n", fd);
+    bpf_trace_printk("fd (Frame): %d\n", fd);
     // bpf_trace_printk("sport: %u\n", sport);
     // bpf_trace_printk("dport: %u\n", dport);
     // bpf_trace_printk("saddr: %u\n", saddr);
@@ -588,7 +575,7 @@ int probe_http2_framer_check_frame_order(struct pt_regs *ctx)
 
     go_grpc_events.perf_submit(ctx, event, sizeof(*event));
 
-    // bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n\n");
+    bpf_trace_printk("----------> probe_http2_framer_check_frame_order done!\n\n");
     return 0;
 }
 
@@ -608,7 +595,7 @@ int probe_http2_framer_write_data(struct pt_regs *ctx)
     int64_t data_len = 0;
     bpf_probe_read(&data_len, sizeof(data_len), sp + 32);
 
-    // bpf_trace_printk("stream_id: %d\n", stream_id);
+    bpf_trace_printk("stream_id: %d\n", stream_id);
     // bpf_trace_printk("data_len: %d\n", data_len);
     void *framer_ptr = NULL;
     bpf_probe_read(&framer_ptr, sizeof(framer_ptr), sp + 8);
@@ -647,6 +634,4 @@ int probe_http2_framer_write_data(struct pt_regs *ctx)
 */
 
 /*
-需要解决的问题：
-长连接还是短连接
 */
