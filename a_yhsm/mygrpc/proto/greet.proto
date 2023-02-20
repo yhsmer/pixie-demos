@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package mygrpc;
+
+option go_package = "mygrpc/proto";
+
+// The greeting service. Used to demo HTTP2 tracer with gRPC application.
+service Greeter {
+  // Sends a greeting to the provided name.
+  rpc Simple(HelloRequest) returns (HelloReply){}
+  rpc SimpleToStream (HelloRequest) returns (stream HelloReply){}
+  rpc StreamToSimple (stream HelloRequest) returns (HelloReply){}
+}
+
+// The request message containing the name to greet.
+message HelloRequest {
+  string name = 1;
+}
+
+// The response message containing the greeting to a name.
+message HelloReply {
+  string message = 1;
+}
