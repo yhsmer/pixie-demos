@@ -8,16 +8,25 @@ import (
 	"io"
 	"strconv"
 	"google.golang.org/grpc"
-
+	"github.com/google/uuid"
+	"google.golang.org/grpc/metadata"
+	// "fmt"
 	pb "mygrpc/proto"
 )
 
 func mustCreateGrpcClientConn(address string) *grpc.ClientConn {
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithUnaryInterceptor(UnaryClientInterceptor))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	return conn
+}
+
+func UnaryClientInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	log.Printf("before invoker. method: %+v, request:%+v", method, req)
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	log.Printf("after invoker. reply: %+v", reply)
+	return err
 }
 
 func callSimple(address, name string, count, sleep_millis int) {
@@ -26,14 +35,23 @@ func callSimple(address, name string, count, sleep_millis int) {
 
 	c := pb.NewGreeterClient(conn)
 
+    traceid := uuid.New().String()
+    // ctx = metadata.AppendToOutgoingContext(ctx, "trace-id", traceID)
+	// fmt.Println("traceID=%s", traceID)
+
+	// md := metadata.Pairs("test_data", uuid.New().String())
+	
 	for i := 0; i < 2; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 10000*time.Millisecond)
+		ctx = metadata.AppendToOutgoingContext(context.Background(), "traceid", traceid)
 		defer cancel()
 		r, err := c.Simple(ctx, &pb.HelloRequest{Name: name})
 		if err != nil {
 			log.Fatalf("could not greet: %v", err)
 		}
+		// 从 metadata 中获取 traceid
 		log.Printf("Greeting: %s", r.Message)
+		log.Printf("test_data: %s", traceid)
 		time.Sleep(time.Duration(sleep_millis) * time.Millisecond)
 	}
 }

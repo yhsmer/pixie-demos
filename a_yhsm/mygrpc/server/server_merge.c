@@ -304,9 +304,9 @@ static void submit_headers(struct pt_regs *ctx, void *fields_ptr, int64_t fields
         copy_header_field_no_struct(&event->name_msg, &event->name_size, header_field_ptr);
         copy_header_field_no_struct(&event->value_msg, &event->value_size, header_field_ptr + 16);
 
-        // bpf_trace_printk("(event) name: %s\n", event->name_msg);
-        // bpf_trace_printk("(event) name_size: %d\n", event->name_size);
-        // bpf_trace_printk("(event) value: %s\n", event->value_msg);
+        bpf_trace_printk("(event) name: %s\n", event->name_msg);
+        bpf_trace_printk("(event) name_size: %d\n", event->name_size);
+        bpf_trace_printk("(event) value: %s\n", event->value_msg);
 
         go_grpc_events.perf_submit(ctx, event, sizeof(*event));
     }
